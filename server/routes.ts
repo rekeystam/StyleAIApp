@@ -167,10 +167,21 @@ Focus on color coordination, style compatibility, and occasion appropriateness. 
     const text = response.text();
     
     try {
-      const parsed = JSON.parse(text);
+      // Clean the response text by removing markdown code blocks and any extra whitespace
+      let cleanText = text.replace(/```json\s*/g, '').replace(/\s*```/g, '').trim();
+      
+      // Try to extract JSON if it's embedded in other text
+      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanText = jsonMatch[0];
+      }
+      
+      console.log("Cleaned outfit suggestions response:", cleanText);
+      const parsed = JSON.parse(cleanText);
       return parsed.outfits || [];
     } catch (parseError) {
       console.error("Failed to parse outfit suggestions:", text);
+      console.error("Parse error:", parseError);
       return [];
     }
   } catch (error) {
