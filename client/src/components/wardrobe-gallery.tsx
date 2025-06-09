@@ -40,11 +40,8 @@ export function WardrobeGallery() {
     },
   });
 
-  const filteredItems = items.filter(item => 
-    filterCategory === 'all' || item.category === filterCategory
-  );
-
-  const categories = ['all', ...Array.from(new Set(items.map(item => item.category)))];
+  const categories = ['all', ...new Set(items.map(item => item.category).filter(cat => cat && cat.trim() !== ''))];
+  const filteredItems = filterCategory === 'all' ? items : items.filter(item => item.category === filterCategory);
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
@@ -153,7 +150,7 @@ export function WardrobeGallery() {
           }>
             {filteredItems.map((item) => {
               const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
-              
+
               return (
                 <Card 
                   key={item.id} 
