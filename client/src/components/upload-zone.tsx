@@ -38,12 +38,21 @@ export function UploadZone() {
         description: "Clothing item analyzed and added to your wardrobe.",
       });
     },
-    onError: (error) => {
-      toast({
-        title: "Upload failed",
-        description: error.message || "Failed to analyze clothing item.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      // Handle duplicate item error specifically
+      if (error.status === 409) {
+        toast({
+          title: "Duplicate item detected",
+          description: "An item with this name already exists in your wardrobe. Try a different name.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Upload failed",
+          description: error.message || "Failed to analyze clothing item.",
+          variant: "destructive",
+        });
+      }
     },
   });
 
