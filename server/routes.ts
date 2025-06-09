@@ -27,13 +27,20 @@ const upload = multer({
   }
 });
 
-// Initialize Google Gemini AI
-const genAI = new GoogleGenerativeAI(
-  process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || ""
-);
+// Initialize Google Gemini AI - will be initialized when needed
+let genAI: GoogleGenerativeAI;
 
 async function analyzeClothingImage(imagePath: string): Promise<any> {
   try {
+    // Initialize genAI if not already done
+    if (!genAI) {
+      const apiKey = process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        throw new Error("GOOGLE_API_KEY environment variable is not set");
+      }
+      genAI = new GoogleGenerativeAI(apiKey);
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const imageData = fs.readFileSync(imagePath);
@@ -111,6 +118,15 @@ async function generateOutfitSuggestions(userId: number, occasion?: string): Pro
     
     if (userItems.length < 2) {
       return [];
+    }
+
+    // Initialize genAI if not already done
+    if (!genAI) {
+      const apiKey = process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        throw new Error("GOOGLE_API_KEY environment variable is not set");
+      }
+      genAI = new GoogleGenerativeAI(apiKey);
     }
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
