@@ -259,6 +259,8 @@ function generateUniqueStyleName(occasion: string, items: ClothingItem[], usedNa
 // Global storage for preventing duplicate suggestions per session
 const userSuggestionHistory = new Map<number, Set<string>>();
 
+
+
 async function generateOutfitSuggestions(userId: number, occasion?: string): Promise<any[]> {
   try {
     const userItems = await storage.getClothingItems(userId);
@@ -454,6 +456,43 @@ RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
       
       console.log(`Professional Fashion Styling: Filtered ${outfits.length} outfits down to ${validOutfits.length} expert-validated combinations`);
       console.log(`Duplicate prevention: ${previousSuggestions.size} combinations tracked for user ${userId}`);
+      
+      // Fallback: If no valid outfits after filtering, generate basic combinations
+      if (validOutfits.length === 0 && userItems.length >= 2) {
+        console.log("No valid AI suggestions, creating basic outfit combinations");
+        const fallbackOutfits = [];
+        
+        // Group items by category
+        const tops = userItems.filter(item => item.category === 'tops');
+        const bottoms = userItems.filter(item => item.category === 'bottoms');
+        
+        // Generate basic top + bottom combinations
+        for (const top of tops.slice(0, 2)) {
+          for (const bottom of bottoms.slice(0, 2)) {
+            const itemCombo = [top.id, bottom.id].sort().join(',');
+            if (previousSuggestions.has(itemCombo)) continue;
+            
+            const outfit = {
+              name: `${top.colors[0]} & ${bottom.colors[0]} Casual Look`,
+              occasion: "casual",
+              item_ids: [top.id, bottom.id],
+              confidence: 75,
+              description: `Simple combination of ${top.name} with ${bottom.name}.`,
+              styling_tips: "Keep accessories minimal for a clean look.",
+              weather: "Suitable for most weather conditions"
+            };
+            
+            previousSuggestions.add(itemCombo);
+            fallbackOutfits.push(outfit);
+            
+            if (fallbackOutfits.length >= 2) break;
+          }
+          if (fallbackOutfits.length >= 2) break;
+        }
+        
+        return fallbackOutfits;
+      }
+      
       return validOutfits;
     } catch (parseError) {
       console.error("Failed to parse outfit suggestions:", text);
