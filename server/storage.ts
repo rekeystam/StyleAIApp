@@ -32,6 +32,84 @@ export class MemStorage implements IStorage {
     this.currentUserId = 1;
     this.currentClothingItemId = 1;
     this.currentOutfitId = 1;
+    
+    // Add sample clothing items for testing
+    this.initializeSampleData();
+  }
+  
+  private initializeSampleData() {
+    // Create sample user
+    const sampleUser: User = {
+      id: 1,
+      username: "demo",
+      password: "demo"
+    };
+    this.users.set(1, sampleUser);
+    
+    // Add sample clothing items with different categories
+    const sampleItems: ClothingItem[] = [
+      {
+        id: 1,
+        userId: 1,
+        name: "White Cotton T-Shirt",
+        category: "tops",
+        style: "casual",
+        colors: ["white"],
+        imageUrl: "/sample-tshirt.jpg",
+        aiAnalysis: '{"category":"tops","style":"casual","colors":["white"],"fabric_type":"cotton","pattern":"solid","formality":"casual","season":"all_season","fit":"regular","description":"Classic white cotton t-shirt","styling_tips":"Versatile basic piece","body_type_recommendations":"Suitable for all body types"}',
+        isVerified: true
+      },
+      {
+        id: 2,
+        userId: 1,
+        name: "Blue Denim Jeans",
+        category: "bottoms",
+        style: "casual",
+        colors: ["blue"],
+        imageUrl: "/sample-jeans.jpg",
+        aiAnalysis: '{"category":"bottoms","style":"casual","colors":["blue"],"fabric_type":"denim","pattern":"solid","formality":"casual","season":"all_season","fit":"regular","description":"Classic blue denim jeans","styling_tips":"Essential wardrobe staple","body_type_recommendations":"Suitable for all body types"}',
+        isVerified: true
+      },
+      {
+        id: 3,
+        userId: 1,
+        name: "Black Business Shirt",
+        category: "tops",
+        style: "business",
+        colors: ["black"],
+        imageUrl: "/sample-shirt.jpg",
+        aiAnalysis: '{"category":"tops","style":"business","colors":["black"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Professional black dress shirt","styling_tips":"Perfect for office wear","body_type_recommendations":"Suitable for all body types"}',
+        isVerified: true
+      },
+      {
+        id: 4,
+        userId: 1,
+        name: "Khaki Chinos",
+        category: "bottoms",
+        style: "business",
+        colors: ["khaki", "beige"],
+        imageUrl: "/sample-chinos.jpg",
+        aiAnalysis: '{"category":"bottoms","style":"business","colors":["khaki","beige"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Smart khaki chino pants","styling_tips":"Great for business casual looks","body_type_recommendations":"Suitable for all body types"}',
+        isVerified: true
+      },
+      {
+        id: 5,
+        userId: 1,
+        name: "Brown Leather Belt",
+        category: "accessories",
+        style: "business",
+        colors: ["brown"],
+        imageUrl: "/sample-belt.jpg",
+        aiAnalysis: '{"category":"accessories","style":"business","colors":["brown"],"fabric_type":"leather","pattern":"solid","formality":"business_casual","season":"all_season","fit":"adjustable","description":"Quality brown leather belt","styling_tips":"Complements business and casual outfits","body_type_recommendations":"Universal accessory"}',
+        isVerified: true
+      }
+    ];
+    
+    sampleItems.forEach(item => {
+      this.clothingItems.set(item.id, item);
+    });
+    
+    this.currentClothingItemId = 6;
   }
 
   async getUser(id: number): Promise<User | undefined> {
