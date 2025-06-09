@@ -46,8 +46,9 @@ export class MemStorage implements IStorage {
     };
     this.users.set(1, sampleUser);
     
-    // Add sample clothing items with different categories
+    // Add diverse sample clothing items for comprehensive testing
     const sampleItems: ClothingItem[] = [
+      // Unisex basics
       {
         id: 1,
         userId: 1,
@@ -70,15 +71,16 @@ export class MemStorage implements IStorage {
         aiAnalysis: '{"category":"bottoms","style":"casual","colors":["blue"],"fabric_type":"denim","pattern":"solid","formality":"casual","season":"all_season","fit":"regular","description":"Classic blue denim jeans","styling_tips":"Essential wardrobe staple","body_type_recommendations":"Suitable for all body types"}',
         isVerified: true
       },
+      // Masculine business wear
       {
         id: 3,
         userId: 1,
-        name: "Black Business Shirt",
+        name: "Navy Business Shirt",
         category: "tops",
         style: "business",
-        colors: ["black"],
-        imageUrl: "/sample-shirt.jpg",
-        aiAnalysis: '{"category":"tops","style":"business","colors":["black"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Professional black dress shirt","styling_tips":"Perfect for office wear","body_type_recommendations":"Suitable for all body types"}',
+        colors: ["navy"],
+        imageUrl: "/sample-business-shirt.jpg",
+        aiAnalysis: '{"category":"tops","style":"business","colors":["navy"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Professional navy dress shirt for men","styling_tips":"Perfect for office wear with ties","body_type_recommendations":"Tailored fit for professional appearance"}',
         isVerified: true
       },
       {
@@ -87,13 +89,48 @@ export class MemStorage implements IStorage {
         name: "Khaki Chinos",
         category: "bottoms",
         style: "business",
-        colors: ["khaki", "beige"],
+        colors: ["khaki"],
         imageUrl: "/sample-chinos.jpg",
-        aiAnalysis: '{"category":"bottoms","style":"business","colors":["khaki","beige"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Smart khaki chino pants","styling_tips":"Great for business casual looks","body_type_recommendations":"Suitable for all body types"}',
+        aiAnalysis: '{"category":"bottoms","style":"business","colors":["khaki"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Smart khaki chino pants","styling_tips":"Great for business casual looks","body_type_recommendations":"Suitable for all body types"}',
+        isVerified: true
+      },
+      // Feminine pieces
+      {
+        id: 5,
+        userId: 1,
+        name: "Little Black Dress",
+        category: "dresses",
+        style: "formal",
+        colors: ["black"],
+        imageUrl: "/sample-dress.jpg",
+        aiAnalysis: '{"category":"dresses","style":"formal","colors":["black"],"fabric_type":"polyester","pattern":"solid","formality":"formal","season":"all_season","fit":"fitted","description":"Classic little black dress","styling_tips":"Perfect for evening events and dates","body_type_recommendations":"Flattering A-line silhouette"}',
         isVerified: true
       },
       {
-        id: 5,
+        id: 6,
+        userId: 1,
+        name: "Floral Blouse",
+        category: "tops",
+        style: "casual",
+        colors: ["pink", "white"],
+        imageUrl: "/sample-blouse.jpg",
+        aiAnalysis: '{"category":"tops","style":"casual","colors":["pink","white"],"fabric_type":"chiffon","pattern":"floral","formality":"smart_casual","season":"spring","fit":"regular","description":"Feminine floral blouse with delicate pattern","styling_tips":"Pairs beautifully with skirts or dress pants","body_type_recommendations":"Loose fit suitable for all body types"}',
+        isVerified: true
+      },
+      {
+        id: 7,
+        userId: 1,
+        name: "High-Waisted Black Trousers",
+        category: "bottoms",
+        style: "business",
+        colors: ["black"],
+        imageUrl: "/sample-trousers.jpg",
+        aiAnalysis: '{"category":"bottoms","style":"business","colors":["black"],"fabric_type":"wool","pattern":"solid","formality":"business_casual","season":"all_season","fit":"high_waisted","description":"Elegant high-waisted black trousers","styling_tips":"Professional look when paired with blouses","body_type_recommendations":"High waist creates flattering silhouette"}',
+        isVerified: true
+      },
+      // Accessories and shoes
+      {
+        id: 8,
         userId: 1,
         name: "Brown Leather Belt",
         category: "accessories",
@@ -102,6 +139,51 @@ export class MemStorage implements IStorage {
         imageUrl: "/sample-belt.jpg",
         aiAnalysis: '{"category":"accessories","style":"business","colors":["brown"],"fabric_type":"leather","pattern":"solid","formality":"business_casual","season":"all_season","fit":"adjustable","description":"Quality brown leather belt","styling_tips":"Complements business and casual outfits","body_type_recommendations":"Universal accessory"}',
         isVerified: true
+      },
+      {
+        id: 9,
+        userId: 1,
+        name: "Black Leather Pumps",
+        category: "shoes",
+        style: "formal",
+        colors: ["black"],
+        imageUrl: "/sample-pumps.jpg",
+        aiAnalysis: '{"category":"shoes","style":"formal","colors":["black"],"fabric_type":"leather","pattern":"solid","formality":"formal","season":"all_season","fit":"pointed_toe","description":"Classic black leather pump heels","styling_tips":"Perfect for dresses and business attire","body_type_recommendations":"Elongates legs and adds elegance"}',
+        isVerified: true
+      },
+      {
+        id: 10,
+        userId: 1,
+        name: "White Sneakers",
+        category: "shoes",
+        style: "casual",
+        colors: ["white"],
+        imageUrl: "/sample-sneakers.jpg",
+        aiAnalysis: '{"category":"shoes","style":"casual","colors":["white"],"fabric_type":"canvas","pattern":"solid","formality":"casual","season":"all_season","fit":"regular","description":"Clean white canvas sneakers","styling_tips":"Perfect for casual outfits and weekend wear","body_type_recommendations":"Comfortable and versatile for all"}',
+        isVerified: true
+      },
+      // Additional variety
+      {
+        id: 11,
+        userId: 1,
+        name: "Burgundy Cardigan",
+        category: "outerwear",
+        style: "casual",
+        colors: ["burgundy"],
+        imageUrl: "/sample-cardigan.jpg",
+        aiAnalysis: '{"category":"outerwear","style":"casual","colors":["burgundy"],"fabric_type":"wool","pattern":"solid","formality":"smart_casual","season":"autumn","fit":"regular","description":"Cozy burgundy knit cardigan","styling_tips":"Perfect layering piece for transitional weather","body_type_recommendations":"Flattering drape for all body types"}',
+        isVerified: true
+      },
+      {
+        id: 12,
+        userId: 1,
+        name: "Grey Wool Skirt",
+        category: "bottoms",
+        style: "business",
+        colors: ["grey"],
+        imageUrl: "/sample-skirt.jpg",
+        aiAnalysis: '{"category":"bottoms","style":"business","colors":["grey"],"fabric_type":"wool","pattern":"solid","formality":"business_casual","season":"autumn","fit":"a_line","description":"Professional grey wool A-line skirt","styling_tips":"Pairs well with blouses and blazers","body_type_recommendations":"A-line cut flatters most body types"}',
+        isVerified: true
       }
     ];
     
@@ -109,7 +191,7 @@ export class MemStorage implements IStorage {
       this.clothingItems.set(item.id, item);
     });
     
-    this.currentClothingItemId = 6;
+    this.currentClothingItemId = 13;
   }
 
   async getUser(id: number): Promise<User | undefined> {

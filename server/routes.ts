@@ -112,34 +112,130 @@ Only return valid JSON, no additional text.`;
   }
 }
 
-// Validate outfit combination rules
+// Enhanced outfit validation with comprehensive fashion rules
 function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[]): boolean {
   const selectedItems = userItems.filter(item => itemIds.includes(item.id));
   
-  // Group items by category
+  if (selectedItems.length === 0) return false;
+  
+  // Group items by category and analyze gender targeting
   const categoryCount: { [key: string]: number } = {};
+  const genderStyles: Set<string> = new Set();
+  const formalityLevels: string[] = [];
+  
   selectedItems.forEach(item => {
     categoryCount[item.category] = (categoryCount[item.category] || 0) + 1;
+    
+    // Detect gender orientation from item analysis
+    try {
+      const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
+      if (analysis.description?.toLowerCase().includes('dress') || 
+          analysis.description?.toLowerCase().includes('skirt') ||
+          item.category === 'dresses') {
+        genderStyles.add('feminine');
+      }
+      if (analysis.description?.toLowerCase().includes('suit') ||
+          analysis.description?.toLowerCase().includes('tie') ||
+          item.name.toLowerCase().includes('men')) {
+        genderStyles.add('masculine');
+      }
+      if (analysis.formality) {
+        formalityLevels.push(analysis.formality);
+      }
+    } catch (e) {
+      // Continue validation without gender analysis
+    }
   });
   
-  // Check rules: max 1 item per body area category
-  const bodyAreaCategories = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes'];
-  for (const category of bodyAreaCategories) {
+  // Rule 1: No multiple items from same body area category
+  const singleItemCategories = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes'];
+  for (const category of singleItemCategories) {
     if (categoryCount[category] > 1) {
       return false; // Multiple items from same body area
     }
   }
   
-  // Must have either (top + bottom) OR dress as minimum
+  // Rule 2: Must have complete outfit foundation
   const hasTop = categoryCount['tops'] > 0;
   const hasBottom = categoryCount['bottoms'] > 0;
   const hasDress = categoryCount['dresses'] > 0;
   
   if (!hasDress && !(hasTop && hasBottom)) {
-    return false; // Incomplete outfit
+    return false; // Incomplete outfit - need either dress OR top+bottom
+  }
+  
+  // Rule 3: Gender consistency check (avoid mixing highly gendered items)
+  if (genderStyles.has('feminine') && genderStyles.has('masculine')) {
+    // Allow mix only if items are unisex/neutral
+    const hasStronglyGendered = selectedItems.some(item => {
+      const name = item.name.toLowerCase();
+      const category = item.category.toLowerCase();
+      return name.includes('dress') || name.includes('skirt') || 
+             name.includes('suit jacket') || category === 'dresses';
+    });
+    if (hasStronglyGendered) return false;
+  }
+  
+  // Rule 4: Formality level coherence (within 2 levels difference max)
+  if (formalityLevels.length > 1) {
+    const formalityMap: { [key: string]: number } = {
+      'very_casual': 1, 'casual': 2, 'smart_casual': 3, 
+      'business_casual': 4, 'formal': 5, 'very_formal': 6
+    };
+    const levels = formalityLevels.map(f => formalityMap[f] || 3);
+    const maxDiff = Math.max(...levels) - Math.min(...levels);
+    if (maxDiff > 2) return false; // Too much formality mismatch
   }
   
   return true;
+}
+
+// Generate diverse style names to avoid repetition
+function generateUniqueStyleName(occasion: string, items: ClothingItem[], usedNames: Set<string>): string {
+  const styleTemplates = {
+    casual: [
+      'Weekend Comfort', 'Laid-Back Style', 'Casual Chic', 'Effortless Look', 
+      'Relaxed Elegance', 'Everyday Style', 'Comfortable Cool', 'Easy Going'
+    ],
+    business: [
+      'Professional Edge', 'Corporate Style', 'Business Sharp', 'Office Ready',
+      'Executive Look', 'Workplace Chic', 'Business Sophisticated', 'Professional Polish'
+    ],
+    formal: [
+      'Evening Elegance', 'Formal Finesse', 'Sophisticated Style', 'Refined Look',
+      'Dress-up Ready', 'Special Occasion', 'Polished Perfection', 'Formal Grace'
+    ],
+    date_night: [
+      'Romantic Charm', 'Date Night Allure', 'Evening Romance', 'Captivating Style',
+      'Dinner Date Ready', 'Night Out Chic', 'Romantic Elegance', 'Date Perfect'
+    ],
+    sporty: [
+      'Athletic Edge', 'Sporty Chic', 'Active Style', 'Fitness Ready',
+      'Athleisure Look', 'Workout Vibes', 'Sport Luxe', 'Active Comfort'
+    ]
+  };
+  
+  const templates = styleTemplates[occasion as keyof typeof styleTemplates] || styleTemplates.casual;
+  
+  // Try templates first
+  for (const template of templates) {
+    if (!usedNames.has(template)) {
+      usedNames.add(template);
+      return template;
+    }
+  }
+  
+  // Fallback to item-based naming
+  const topItem = items.find(item => ['tops', 'dresses'].includes(item.category));
+  const bottomItem = items.find(item => item.category === 'bottoms');
+  
+  if (topItem && bottomItem) {
+    const name = `${topItem.colors[0]} & ${bottomItem.colors[0]} ${occasion}`;
+    usedNames.add(name);
+    return name;
+  }
+  
+  return `Stylish ${occasion} ${Math.floor(Math.random() * 100)}`;
 }
 
 async function generateOutfitSuggestions(userId: number, occasion?: string): Promise<any[]> {
@@ -173,32 +269,73 @@ async function generateOutfitSuggestions(userId: number, occasion?: string): Pro
       };
     });
 
+    // Color coordination logic
+    const getColorHarmony = (colors: string[]): string[] => {
+      const colorMap: { [key: string]: string[] } = {
+        'white': ['black', 'navy', 'grey', 'blue', 'red', 'green', 'brown'],
+        'black': ['white', 'grey', 'red', 'pink', 'yellow', 'silver'],
+        'navy': ['white', 'cream', 'light blue', 'grey', 'khaki', 'beige'],
+        'grey': ['white', 'black', 'navy', 'pink', 'yellow', 'blue'],
+        'brown': ['cream', 'beige', 'white', 'navy', 'khaki', 'orange'],
+        'blue': ['white', 'navy', 'grey', 'khaki', 'brown', 'cream'],
+        'red': ['white', 'black', 'navy', 'grey', 'cream'],
+        'green': ['white', 'khaki', 'brown', 'navy', 'cream'],
+        'khaki': ['white', 'navy', 'brown', 'blue', 'green'],
+        'beige': ['brown', 'navy', 'white', 'khaki', 'blue']
+      };
+      
+      return colors.flatMap(color => colorMap[color.toLowerCase()] || ['white', 'black', 'grey']);
+    };
+
     const prompt = `Based on these clothing items: ${JSON.stringify(itemsDescription)}
-    
-Generate 3-6 outfit combinations${occasion ? ` for ${occasion}` : ''} and return them in this JSON format:
+
+Generate 4-6 UNIQUE outfit combinations${occasion ? ` for ${occasion}` : ''} following strict fashion rules:
+
+CRITICAL RULES:
+1. BODY COVERAGE RULES:
+   - EXACTLY ONE item from: tops, bottoms, dresses, outerwear, shoes
+   - NEVER combine multiple pants, shirts, or dresses
+   - Complete outfit = (top + bottom) OR dress + optional accessories
+
+2. GENDER CONSISTENCY:
+   - Keep feminine/masculine styling consistent within each outfit
+   - Don't mix dresses with masculine suits or vice versa
+   - Unisex items (t-shirts, jeans) can work in both styles
+
+3. COLOR HARMONY:
+   - Use complementary colors: white/black/grey with any color
+   - Navy pairs with: white, cream, khaki, light blue
+   - Brown pairs with: cream, beige, white, navy
+   - Avoid clashing: red+green, orange+purple, yellow+pink
+   - Maximum 3 main colors per outfit
+
+4. FORMALITY MATCHING:
+   - Casual: t-shirts, jeans, sneakers, casual dresses
+   - Business: dress shirts, chinos, loafers, blazers
+   - Formal: suits, dress shoes, ties, evening wear
+   - Don't mix formal shoes with casual tops
+
+5. UNIQUE NAMING:
+   - Each outfit name must be different
+   - Use descriptive, specific names
+   - Avoid repetitive phrases
+
+Return JSON format:
 {
   "outfits": [
     {
-      "name": "outfit name",
+      "name": "unique descriptive name",
       "occasion": "business|casual|date_night|sporty|formal",
       "item_ids": [1, 2, 3],
       "confidence": 85,
-      "description": "why this outfit works well",
-      "styling_tips": "how to style and accessorize",
-      "weather": "suitable weather conditions"
+      "description": "specific color and style compatibility explanation",
+      "styling_tips": "practical styling and accessory advice",
+      "weather": "specific weather conditions"
     }
   ]
 }
 
-IMPORTANT RULES:
-1. Each outfit must only include ONE item per body area:
-   - Maximum ONE item from categories: tops, bottoms, dresses, outerwear
-   - Maximum ONE item from category: shoes
-   - Multiple accessories are allowed (belts, hats, jewelry, etc.)
-2. Never combine items from the same category (e.g., don't pair two tops or two bottoms)
-3. A complete outfit should have at minimum: one top + one bottom OR one dress
-4. Focus on color coordination, style compatibility, and occasion appropriateness
-5. Only return valid JSON with no additional text.`;
+Focus on creating visually cohesive, wearable outfits with proper color coordination and style matching.`;
 
     const result = await model.generateContent([prompt]);
     const response = await result.response;
@@ -218,15 +355,50 @@ IMPORTANT RULES:
       const parsed = JSON.parse(cleanText);
       const outfits = parsed.outfits || [];
       
-      // Filter out invalid outfit combinations
-      const validOutfits = outfits.filter((outfit: any) => {
-        if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) {
-          return false;
-        }
-        return validateOutfitCombination(outfit.item_ids, userItems);
-      });
+      // Enhanced validation and post-processing
+      const usedNames = new Set<string>();
+      const validOutfits = outfits
+        .filter((outfit: any) => {
+          if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) {
+            return false;
+          }
+          return validateOutfitCombination(outfit.item_ids, userItems);
+        })
+        .map((outfit: any) => {
+          // Ensure unique names
+          if (usedNames.has(outfit.name)) {
+            const selectedItems = userItems.filter(item => outfit.item_ids.includes(item.id));
+            outfit.name = generateUniqueStyleName(outfit.occasion || 'casual', selectedItems, usedNames);
+          } else {
+            usedNames.add(outfit.name);
+          }
+          
+          // Enhance color coordination check
+          const selectedItems = userItems.filter(item => outfit.item_ids.includes(item.id));
+          const allColors = selectedItems.flatMap(item => item.colors);
+          const uniqueColors = Array.from(new Set(allColors));
+          
+          // Adjust confidence based on color harmony
+          if (uniqueColors.length > 3) {
+            outfit.confidence = Math.max(60, (outfit.confidence || 80) - 15); // Reduce confidence for too many colors
+          }
+          
+          // Color clash detection
+          const hasColorClash = 
+            (uniqueColors.includes('red') && uniqueColors.includes('green')) ||
+            (uniqueColors.includes('orange') && uniqueColors.includes('purple')) ||
+            (uniqueColors.includes('yellow') && uniqueColors.includes('pink'));
+          
+          if (hasColorClash) {
+            outfit.confidence = Math.max(50, (outfit.confidence || 80) - 25);
+            outfit.description += " Note: Bold color combination - ensure proper styling.";
+          }
+          
+          return outfit;
+        })
+        .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0)); // Sort by confidence
       
-      console.log(`Filtered ${outfits.length} outfits down to ${validOutfits.length} valid combinations`);
+      console.log(`Filtered ${outfits.length} outfits down to ${validOutfits.length} valid combinations with enhanced validation`);
       return validOutfits;
     } catch (parseError) {
       console.error("Failed to parse outfit suggestions:", text);
