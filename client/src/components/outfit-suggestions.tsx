@@ -148,7 +148,7 @@ export function OutfitSuggestions() {
               <SelectValue placeholder="Filter by occasion" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Occasions</SelectItem>
+              <SelectItem value="all">All Occasions</SelectItem>
               <SelectItem value="business">Business</SelectItem>
               <SelectItem value="casual">Casual</SelectItem>
               <SelectItem value="date_night">Date Night</SelectItem>
