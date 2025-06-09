@@ -112,80 +112,95 @@ Only return valid JSON, no additional text.`;
   }
 }
 
-// Enhanced outfit validation with comprehensive fashion rules
+// CRITICAL: Fashion Stylist Validation System - Following Expert Guidelines
 function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[]): boolean {
   const selectedItems = userItems.filter(item => itemIds.includes(item.id));
   
   if (selectedItems.length === 0) return false;
   
-  // Group items by category and analyze gender targeting
-  const categoryCount: { [key: string]: number } = {};
-  const genderStyles: Set<string> = new Set();
-  const formalityLevels: string[] = [];
+  // RULE 1: GENDER-SPECIFIC STYLING VALIDATION
+  const genderMarkers = {
+    masculine: new Set(['men', 'masculine', 'suit', 'tie', 'tuxedo']),
+    feminine: new Set(['women', 'feminine', 'dress', 'skirt', 'blouse', 'heels', 'pumps'])
+  };
+  
+  let detectedGenders = new Set<string>();
   
   selectedItems.forEach(item => {
-    categoryCount[item.category] = (categoryCount[item.category] || 0) + 1;
+    const itemText = `${item.name} ${item.category}`.toLowerCase();
+    const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
+    const description = (analysis.description || '').toLowerCase();
     
-    // Detect gender orientation from item analysis
-    try {
-      const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
-      if (analysis.description?.toLowerCase().includes('dress') || 
-          analysis.description?.toLowerCase().includes('skirt') ||
-          item.category === 'dresses') {
-        genderStyles.add('feminine');
-      }
-      if (analysis.description?.toLowerCase().includes('suit') ||
-          analysis.description?.toLowerCase().includes('tie') ||
-          item.name.toLowerCase().includes('men')) {
-        genderStyles.add('masculine');
-      }
-      if (analysis.formality) {
-        formalityLevels.push(analysis.formality);
-      }
-    } catch (e) {
-      // Continue validation without gender analysis
+    // Check for gender-specific indicators
+    if (itemText.includes('men') || itemText.includes('suit') || itemText.includes('tie')) {
+      detectedGenders.add('masculine');
     }
+    if (itemText.includes('women') || itemText.includes('dress') || itemText.includes('skirt') || 
+        itemText.includes('blouse') || itemText.includes('heels') || itemText.includes('pumps')) {
+      detectedGenders.add('feminine');
+    }
+    
+    // Category-based gender detection
+    if (item.category === 'dresses') detectedGenders.add('feminine');
+    if (description.includes('high-waisted') || description.includes('a-line')) detectedGenders.add('feminine');
   });
   
-  // Rule 1: No multiple items from same body area category
+  // MANDATORY: Never mix male and female clothing
+  if (detectedGenders.has('masculine') && detectedGenders.has('feminine')) {
+    return false; // FORBIDDEN cross-gender mixing
+  }
+  
+  // RULE 2: OUTFIT COMPOSITION VALIDATION
+  const categoryCount: { [key: string]: number } = {};
+  selectedItems.forEach(item => {
+    categoryCount[item.category] = (categoryCount[item.category] || 0) + 1;
+  });
+  
+  // NEVER more than ONE bottom piece per outfit
+  const bottomCategories = ['bottoms', 'dresses'];
+  let bottomCount = 0;
+  bottomCategories.forEach(cat => {
+    bottomCount += categoryCount[cat] || 0;
+  });
+  if (bottomCount > 1) return false; // FORBIDDEN: Multiple bottom pieces
+  
+  // NEVER duplicate item types
   const singleItemCategories = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes'];
   for (const category of singleItemCategories) {
     if (categoryCount[category] > 1) {
-      return false; // Multiple items from same body area
+      return false; // FORBIDDEN: Duplicate item types
     }
   }
   
-  // Rule 2: Must have complete outfit foundation
+  // Must have complete outfit foundation
   const hasTop = categoryCount['tops'] > 0;
   const hasBottom = categoryCount['bottoms'] > 0;
   const hasDress = categoryCount['dresses'] > 0;
   
   if (!hasDress && !(hasTop && hasBottom)) {
-    return false; // Incomplete outfit - need either dress OR top+bottom
+    return false; // Incomplete outfit structure
   }
   
-  // Rule 3: Gender consistency check (avoid mixing highly gendered items)
-  if (genderStyles.has('feminine') && genderStyles.has('masculine')) {
-    // Allow mix only if items are unisex/neutral
-    const hasStronglyGendered = selectedItems.some(item => {
-      const name = item.name.toLowerCase();
-      const category = item.category.toLowerCase();
-      return name.includes('dress') || name.includes('skirt') || 
-             name.includes('suit jacket') || category === 'dresses';
-    });
-    if (hasStronglyGendered) return false;
+  // RULE 3: COLOR HARMONY ENFORCEMENT
+  const allColors = selectedItems.flatMap(item => item.colors.map(c => c.toLowerCase()));
+  const uniqueColors = Array.from(new Set(allColors));
+  
+  // Check for forbidden color combinations
+  const forbiddenCombos = [
+    ['orange', 'pink'], ['green', 'red'], ['purple', 'yellow'],
+    ['neon', 'electric'], ['bright', 'hot']
+  ];
+  
+  for (const [color1, color2] of forbiddenCombos) {
+    const hasColor1 = uniqueColors.some(c => c.includes(color1));
+    const hasColor2 = uniqueColors.some(c => c.includes(color2));
+    if (hasColor1 && hasColor2) {
+      return false; // FORBIDDEN color combination
+    }
   }
   
-  // Rule 4: Formality level coherence (within 2 levels difference max)
-  if (formalityLevels.length > 1) {
-    const formalityMap: { [key: string]: number } = {
-      'very_casual': 1, 'casual': 2, 'smart_casual': 3, 
-      'business_casual': 4, 'formal': 5, 'very_formal': 6
-    };
-    const levels = formalityLevels.map(f => formalityMap[f] || 3);
-    const maxDiff = Math.max(...levels) - Math.min(...levels);
-    if (maxDiff > 2) return false; // Too much formality mismatch
-  }
+  // Maximum 4 colors total
+  if (uniqueColors.length > 4) return false;
   
   return true;
 }
@@ -238,6 +253,9 @@ function generateUniqueStyleName(occasion: string, items: ClothingItem[], usedNa
   return `Stylish ${occasion} ${Math.floor(Math.random() * 100)}`;
 }
 
+// Global storage for preventing duplicate suggestions per session
+const userSuggestionHistory = new Map<number, Set<string>>();
+
 async function generateOutfitSuggestions(userId: number, occasion?: string): Promise<any[]> {
   try {
     const userItems = await storage.getClothingItems(userId);
@@ -245,6 +263,12 @@ async function generateOutfitSuggestions(userId: number, occasion?: string): Pro
     if (userItems.length < 2) {
       return [];
     }
+
+    // Initialize suggestion history for user if not exists
+    if (!userSuggestionHistory.has(userId)) {
+      userSuggestionHistory.set(userId, new Set());
+    }
+    const previousSuggestions = userSuggestionHistory.get(userId)!;
 
     // Initialize genAI if not already done
     if (!genAI) {
@@ -287,55 +311,90 @@ async function generateOutfitSuggestions(userId: number, occasion?: string): Pro
       return colors.flatMap(color => colorMap[color.toLowerCase()] || ['white', 'black', 'grey']);
     };
 
-    const prompt = `Based on these clothing items: ${JSON.stringify(itemsDescription)}
+    // Detect wardrobe gender orientation for consistent styling
+    const wardrobeAnalysis = userItems.map(item => {
+      const text = `${item.name} ${item.category}`.toLowerCase();
+      let genderStyle = 'unisex';
+      
+      if (text.includes('dress') || text.includes('skirt') || text.includes('blouse') || 
+          text.includes('heels') || text.includes('pumps') || item.category === 'dresses') {
+        genderStyle = 'feminine';
+      } else if (text.includes('suit') || text.includes('tie') || text.includes('men')) {
+        genderStyle = 'masculine';
+      }
+      
+      return { ...item, genderStyle };
+    });
 
-Generate 4-6 UNIQUE outfit combinations${occasion ? ` for ${occasion}` : ''} following strict fashion rules:
+    const prompt = `CRITICAL SYSTEM INSTRUCTIONS FOR AI STYLING AGENT
 
-CRITICAL RULES:
-1. BODY COVERAGE RULES:
-   - EXACTLY ONE item from: tops, bottoms, dresses, outerwear, shoes
-   - NEVER combine multiple pants, shirts, or dresses
-   - Complete outfit = (top + bottom) OR dress + optional accessories
+You are an expert AI Fashion Stylist with strict operational rules. Follow these NON-NEGOTIABLE guidelines:
 
-2. GENDER CONSISTENCY:
-   - Keep feminine/masculine styling consistent within each outfit
-   - Don't mix dresses with masculine suits or vice versa
-   - Unisex items (t-shirts, jeans) can work in both styles
+WARDROBE ITEMS: ${JSON.stringify(itemsDescription)}
 
-3. COLOR HARMONY:
-   - Use complementary colors: white/black/grey with any color
-   - Navy pairs with: white, cream, khaki, light blue
-   - Brown pairs with: cream, beige, white, navy
-   - Avoid clashing: red+green, orange+purple, yellow+pink
-   - Maximum 3 main colors per outfit
+PREVIOUS OUTFIT COMBINATIONS TO AVOID: ${Array.from(previousSuggestions).join(', ')}
 
-4. FORMALITY MATCHING:
-   - Casual: t-shirts, jeans, sneakers, casual dresses
-   - Business: dress shirts, chinos, loafers, blazers
-   - Formal: suits, dress shoes, ties, evening wear
-   - Don't mix formal shoes with casual tops
+CORE OPERATIONAL RULES:
 
-5. UNIQUE NAMING:
-   - Each outfit name must be different
-   - Use descriptive, specific names
-   - Avoid repetitive phrases
+RULE 1: GENDER-SPECIFIC STYLING (MANDATORY)
+- NEVER mix male and female clothing items in a single outfit
+- Male outfits ONLY: Men's shirts, men's pants, men's jackets, men's shoes, men's accessories
+- Female outfits ONLY: Women's tops, women's bottoms, women's dresses, women's shoes, women's accessories
+- If mixing unisex items (t-shirts, jeans), maintain consistent styling approach
 
-Return JSON format:
+RULE 2: OUTFIT COMPOSITION VALIDATION (MANDATORY)
+- NEVER include more than ONE bottom piece per outfit
+- ❌ FORBIDDEN: Two pants, two skirts, pants + skirt, multiple bottoms
+- ✅ ALLOWED: One pants OR one skirt OR one shorts OR one dress
+- NEVER include duplicate item types
+- ❌ FORBIDDEN: Two shirts, two jackets, two shoes of same type
+- ✅ ALLOWED: One of each item type only
+
+RULE 3: COLOR HARMONY ENFORCEMENT (MANDATORY)
+APPROVED color schemes ONLY:
+- Monochromatic (same color, different shades)
+- Navy + White + Beige (Classic Professional)
+- Black + White + Gray (Monochrome Chic)
+- Burgundy + Cream + Gold (Rich Elegance)
+- Forest Green + Tan + Brown (Earth Tones)
+
+FORBIDDEN COLOR COMBINATIONS:
+- ❌ Bright Orange + Hot Pink
+- ❌ Neon Green + Electric Blue  
+- ❌ Red + Green (unless Christmas theme)
+- ❌ Purple + Yellow
+- ❌ More than 3 bright colors together
+
+RULE 4: DUPLICATE PREVENTION (MANDATORY)
+- NEVER suggest the same outfit twice
+- NEVER use the same combination of item IDs
+- Each outfit name must be completely unique
+- Generate fresh new combinations only
+
+OUTFIT VALIDATION CHECKLIST:
+✅ Only ONE bottom piece included
+✅ No duplicate item types
+✅ Gender-consistent styling
+✅ Colors follow approved harmony rules
+✅ Appropriate for specified occasion: ${occasion || 'any'}
+✅ Completely unique combination
+
+Generate 3-5 COMPLETELY NEW outfit combinations in this JSON format:
 {
   "outfits": [
     {
-      "name": "unique descriptive name",
-      "occasion": "business|casual|date_night|sporty|formal",
+      "name": "unique descriptive name (never used before)",
+      "occasion": "${occasion || 'casual'}",
       "item_ids": [1, 2, 3],
       "confidence": 85,
-      "description": "specific color and style compatibility explanation",
-      "styling_tips": "practical styling and accessory advice",
-      "weather": "specific weather conditions"
+      "description": "explain why colors work together and style compatibility",
+      "styling_tips": "specific practical advice for wearing this outfit",
+      "weather": "appropriate weather conditions"
     }
   ]
 }
 
-Focus on creating visually cohesive, wearable outfits with proper color coordination and style matching.`;
+RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
 
     const result = await model.generateContent([prompt]);
     const response = await result.response;
@@ -355,16 +414,28 @@ Focus on creating visually cohesive, wearable outfits with proper color coordina
       const parsed = JSON.parse(cleanText);
       const outfits = parsed.outfits || [];
       
-      // Enhanced validation and post-processing
+      // CRITICAL: Enhanced validation and duplicate prevention
       const usedNames = new Set<string>();
       const validOutfits = outfits
         .filter((outfit: any) => {
           if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) {
             return false;
           }
+          
+          // Check for duplicate item combinations
+          const itemCombo = outfit.item_ids.sort().join(',');
+          if (previousSuggestions.has(itemCombo)) {
+            console.log(`Rejected duplicate combination: ${itemCombo}`);
+            return false; // FORBIDDEN: Duplicate outfit combination
+          }
+          
           return validateOutfitCombination(outfit.item_ids, userItems);
         })
         .map((outfit: any) => {
+          // Track this combination to prevent future duplicates
+          const itemCombo = outfit.item_ids.sort().join(',');
+          previousSuggestions.add(itemCombo);
+          
           // Ensure unique names
           if (usedNames.has(outfit.name)) {
             const selectedItems = userItems.filter(item => outfit.item_ids.includes(item.id));
@@ -373,32 +444,34 @@ Focus on creating visually cohesive, wearable outfits with proper color coordina
             usedNames.add(outfit.name);
           }
           
-          // Enhance color coordination check
+          // Enhanced color coordination validation
           const selectedItems = userItems.filter(item => outfit.item_ids.includes(item.id));
           const allColors = selectedItems.flatMap(item => item.colors);
           const uniqueColors = Array.from(new Set(allColors));
           
-          // Adjust confidence based on color harmony
-          if (uniqueColors.length > 3) {
-            outfit.confidence = Math.max(60, (outfit.confidence || 80) - 15); // Reduce confidence for too many colors
+          // Strict color harmony enforcement
+          const hasApprovedColors = 
+            (uniqueColors.includes('navy') && uniqueColors.includes('white')) ||
+            (uniqueColors.includes('black') && uniqueColors.includes('white')) ||
+            (uniqueColors.includes('burgundy') && uniqueColors.includes('cream')) ||
+            uniqueColors.every(color => ['white', 'black', 'grey', 'navy', 'beige', 'khaki'].includes(color));
+          
+          if (hasApprovedColors) {
+            outfit.confidence = Math.min(100, (outfit.confidence || 80) + 10);
           }
           
-          // Color clash detection
-          const hasColorClash = 
-            (uniqueColors.includes('red') && uniqueColors.includes('green')) ||
-            (uniqueColors.includes('orange') && uniqueColors.includes('purple')) ||
-            (uniqueColors.includes('yellow') && uniqueColors.includes('pink'));
-          
-          if (hasColorClash) {
-            outfit.confidence = Math.max(50, (outfit.confidence || 80) - 25);
-            outfit.description += " Note: Bold color combination - ensure proper styling.";
+          // Penalty for too many colors
+          if (uniqueColors.length > 3) {
+            outfit.confidence = Math.max(60, (outfit.confidence || 80) - 15);
           }
           
           return outfit;
         })
-        .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0)); // Sort by confidence
+        .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, 5); // Limit to top 5 outfits
       
-      console.log(`Filtered ${outfits.length} outfits down to ${validOutfits.length} valid combinations with enhanced validation`);
+      console.log(`Professional Fashion Styling: Filtered ${outfits.length} outfits down to ${validOutfits.length} expert-validated combinations`);
+      console.log(`Duplicate prevention: ${previousSuggestions.size} combinations tracked for user ${userId}`);
       return validOutfits;
     } catch (parseError) {
       console.error("Failed to parse outfit suggestions:", text);
