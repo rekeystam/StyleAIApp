@@ -279,7 +279,8 @@ async function generateOutfitSuggestions(userId: number, occasion?: string): Pro
     if (!genAI) {
       const apiKey = process.env.GOOGLE_API_KEY;
       if (!apiKey) {
-        throw new Error("GOOGLE_API_KEY environment variable is not set");
+        console.log("No Google API key available");
+        return [];
       }
       genAI = new GoogleGenerativeAI(apiKey);
     }
@@ -499,8 +500,65 @@ RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
       console.error("Parse error:", parseError);
       return [];
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to generate outfit suggestions:", error);
+    
+    // Handle API quota exceeded gracefully
+    if (error.status === 429 || error.message?.includes('quota') || error.message?.includes('Too Many Requests')) {
+      console.log("API quota exceeded, generating basic outfit combinations");
+      
+      // Generate simple outfit combinations when AI is unavailable
+      const basicOutfits = [];
+      const tops = userItems.filter(item => item.category === 'tops');
+      const bottoms = userItems.filter(item => item.category === 'bottoms');
+      const dresses = userItems.filter(item => item.category === 'dresses');
+      
+      // Create basic top + bottom combinations
+      for (let i = 0; i < Math.min(tops.length, 2); i++) {
+        for (let j = 0; j < Math.min(bottoms.length, 2); j++) {
+          const top = tops[i];
+          const bottom = bottoms[j];
+          const itemCombo = [top.id, bottom.id].sort().join(',');
+          
+          if (previousSuggestions.has(itemCombo)) continue;
+          
+          basicOutfits.push({
+            name: `${top.colors[0]} ${top.name} with ${bottom.colors[0]} ${bottom.name}`,
+            occasion: occasion || "casual",
+            item_ids: [top.id, bottom.id],
+            confidence: 75,
+            description: `Classic combination of ${top.name} and ${bottom.name}`,
+            styling_tips: "Keep accessories simple for a clean look",
+            weather: "Suitable for most conditions"
+          });
+          
+          previousSuggestions.add(itemCombo);
+          if (basicOutfits.length >= 3) break;
+        }
+        if (basicOutfits.length >= 3) break;
+      }
+      
+      // Add dress outfits if available
+      for (const dress of dresses.slice(0, 2)) {
+        const itemCombo = [dress.id].join(',');
+        if (previousSuggestions.has(itemCombo)) continue;
+        
+        basicOutfits.push({
+          name: `Elegant ${dress.colors[0]} Dress`,
+          occasion: "formal",
+          item_ids: [dress.id],
+          confidence: 80,
+          description: `Beautiful ${dress.name} for special occasions`,
+          styling_tips: "Add accessories to personalize the look",
+          weather: "Perfect for mild weather"
+        });
+        
+        previousSuggestions.add(itemCombo);
+      }
+      
+      return basicOutfits.slice(0, 3);
+    }
+    
     return [];
   }
 }
@@ -547,9 +605,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Analyze image with AI
-      console.log("Analyzing image with Gemini AI...");
-      const analysis = await analyzeClothingImage(req.file.path);
+      // Try to analyze image with AI, fallback if quota exceeded
+      let analysis;
+      try {
+        console.log("Analyzing image with Gemini AI...");
+        analysis = await analyzeClothingImage(req.file.path);
+      } catch (error: any) {
+        console.log("AI analysis failed, using fallback analysis:", error.message);
+        // Provide basic fallback analysis when AI is unavailable
+        analysis = {
+          category: "other",
+          style: "casual", 
+          colors: ["unknown"],
+          fabric_type: "unknown",
+          pattern: "unknown",
+          formality: "casual",
+          season: "all_season",
+          fit: "regular",
+          description: `Clothing item: ${name}`,
+          styling_tips: "Style according to occasion and personal preference",
+          body_type_recommendations: "Suitable for various body types"
+        };
+      }
       
       // Create clothing item
       const itemData = {
