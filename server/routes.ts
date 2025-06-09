@@ -262,18 +262,19 @@ const userSuggestionHistory = new Map<number, Set<string>>();
 
 
 async function generateOutfitSuggestions(userId: number, occasion?: string): Promise<any[]> {
-  try {
-    const userItems = await storage.getClothingItems(userId);
-    
-    if (userItems.length < 2) {
-      return [];
-    }
+  const userItems = await storage.getClothingItems(userId);
+  
+  if (userItems.length < 2) {
+    return [];
+  }
 
-    // Initialize suggestion history for user if not exists
-    if (!userSuggestionHistory.has(userId)) {
-      userSuggestionHistory.set(userId, new Set());
-    }
-    const previousSuggestions = userSuggestionHistory.get(userId)!;
+  // Initialize suggestion history for user if not exists
+  if (!userSuggestionHistory.has(userId)) {
+    userSuggestionHistory.set(userId, new Set());
+  }
+  const previousSuggestions = userSuggestionHistory.get(userId)!;
+
+  try {
 
     // Initialize genAI if not already done
     if (!genAI) {
@@ -506,61 +507,64 @@ RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
     // Handle API quota exceeded gracefully
     if (error.status === 429 || error.message?.includes('quota') || error.message?.includes('Too Many Requests')) {
       console.log("API quota exceeded, generating basic outfit combinations");
-      
-      // Generate simple outfit combinations when AI is unavailable
-      const basicOutfits = [];
-      const tops = userItems.filter(item => item.category === 'tops');
-      const bottoms = userItems.filter(item => item.category === 'bottoms');
-      const dresses = userItems.filter(item => item.category === 'dresses');
-      
-      // Create basic top + bottom combinations
-      for (let i = 0; i < Math.min(tops.length, 2); i++) {
-        for (let j = 0; j < Math.min(bottoms.length, 2); j++) {
-          const top = tops[i];
-          const bottom = bottoms[j];
-          const itemCombo = [top.id, bottom.id].sort().join(',');
-          
-          if (previousSuggestions.has(itemCombo)) continue;
-          
-          basicOutfits.push({
-            name: `${top.colors[0]} ${top.name} with ${bottom.colors[0]} ${bottom.name}`,
-            occasion: occasion || "casual",
-            item_ids: [top.id, bottom.id],
-            confidence: 75,
-            description: `Classic combination of ${top.name} and ${bottom.name}`,
-            styling_tips: "Keep accessories simple for a clean look",
-            weather: "Suitable for most conditions"
-          });
-          
-          previousSuggestions.add(itemCombo);
-          if (basicOutfits.length >= 3) break;
-        }
-        if (basicOutfits.length >= 3) break;
-      }
-      
-      // Add dress outfits if available
-      for (const dress of dresses.slice(0, 2)) {
-        const itemCombo = [dress.id].join(',');
-        if (previousSuggestions.has(itemCombo)) continue;
-        
-        basicOutfits.push({
-          name: `Elegant ${dress.colors[0]} Dress`,
-          occasion: "formal",
-          item_ids: [dress.id],
-          confidence: 80,
-          description: `Beautiful ${dress.name} for special occasions`,
-          styling_tips: "Add accessories to personalize the look",
-          weather: "Perfect for mild weather"
-        });
-        
-        previousSuggestions.add(itemCombo);
-      }
-      
-      return basicOutfits.slice(0, 3);
+      return generateBasicOutfitCombinations(userItems, previousSuggestions, occasion);
     }
     
     return [];
   }
+}
+
+// Helper function to generate basic outfit combinations when AI is unavailable
+function generateBasicOutfitCombinations(userItems: any[], previousSuggestions: Set<string>, occasion?: string): any[] {
+  const basicOutfits = [];
+  const tops = userItems.filter((item: any) => item.category === 'tops');
+  const bottoms = userItems.filter((item: any) => item.category === 'bottoms');
+  const dresses = userItems.filter((item: any) => item.category === 'dresses');
+  
+  // Create basic top + bottom combinations
+  for (let i = 0; i < Math.min(tops.length, 2); i++) {
+    for (let j = 0; j < Math.min(bottoms.length, 2); j++) {
+      const top = tops[i];
+      const bottom = bottoms[j];
+      const itemCombo = [top.id, bottom.id].sort().join(',');
+      
+      if (previousSuggestions.has(itemCombo)) continue;
+      
+      basicOutfits.push({
+        name: `${top.colors[0]} ${top.name} with ${bottom.colors[0]} ${bottom.name}`,
+        occasion: occasion || "casual",
+        item_ids: [top.id, bottom.id],
+        confidence: 75,
+        description: `Classic combination of ${top.name} and ${bottom.name}`,
+        styling_tips: "Keep accessories simple for a clean look",
+        weather: "Suitable for most conditions"
+      });
+      
+      previousSuggestions.add(itemCombo);
+      if (basicOutfits.length >= 3) break;
+    }
+    if (basicOutfits.length >= 3) break;
+  }
+  
+  // Add dress outfits if available
+  for (const dress of dresses.slice(0, 2)) {
+    const itemCombo = [dress.id].join(',');
+    if (previousSuggestions.has(itemCombo)) continue;
+    
+    basicOutfits.push({
+      name: `Elegant ${dress.colors[0]} Dress`,
+      occasion: "formal",
+      item_ids: [dress.id],
+      confidence: 80,
+      description: `Beautiful ${dress.name} for special occasions`,
+      styling_tips: "Add accessories to personalize the look",
+      weather: "Perfect for mild weather"
+    });
+    
+    previousSuggestions.add(itemCombo);
+  }
+  
+  return basicOutfits.slice(0, 3);
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
