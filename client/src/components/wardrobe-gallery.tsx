@@ -40,7 +40,12 @@ export function WardrobeGallery() {
     },
   });
 
-  const categories = ['all', ...new Set(items.map(item => item.category).filter(cat => cat && cat.trim() !== ''))];
+  // Get unique categories, filtering out empty/null/undefined values
+  const validCategories = items
+    .map(item => item.category)
+    .filter(cat => cat && typeof cat === 'string' && cat.trim() !== '');
+  
+  const categories = ['all', ...new Set(validCategories)];
   const filteredItems = filterCategory === 'all' ? items : items.filter(item => item.category === filterCategory);
 
   const getCategoryColor = (category: string) => {
@@ -107,7 +112,7 @@ export function WardrobeGallery() {
                 <SelectValue placeholder="Filter by category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.filter(category => category !== '').map(category => (
+                {categories.map(category => (
                   <SelectItem key={category} value={category}>
                     {category === 'all' ? 'All Categories' : category.charAt(0).toUpperCase() + category.slice(1)}
                   </SelectItem>
