@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertClothingItemSchema, insertOutfitSchema } from "@shared/schema";
+import { insertClothingItemSchema, insertOutfitSchema, ClothingItem } from "@shared/schema";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import multer from "multer";
 import path from "path";
@@ -112,6 +112,36 @@ Only return valid JSON, no additional text.`;
   }
 }
 
+// Validate outfit combination rules
+function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[]): boolean {
+  const selectedItems = userItems.filter(item => itemIds.includes(item.id));
+  
+  // Group items by category
+  const categoryCount: { [key: string]: number } = {};
+  selectedItems.forEach(item => {
+    categoryCount[item.category] = (categoryCount[item.category] || 0) + 1;
+  });
+  
+  // Check rules: max 1 item per body area category
+  const bodyAreaCategories = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes'];
+  for (const category of bodyAreaCategories) {
+    if (categoryCount[category] > 1) {
+      return false; // Multiple items from same body area
+    }
+  }
+  
+  // Must have either (top + bottom) OR dress as minimum
+  const hasTop = categoryCount['tops'] > 0;
+  const hasBottom = categoryCount['bottoms'] > 0;
+  const hasDress = categoryCount['dresses'] > 0;
+  
+  if (!hasDress && !(hasTop && hasBottom)) {
+    return false; // Incomplete outfit
+  }
+  
+  return true;
+}
+
 async function generateOutfitSuggestions(userId: number, occasion?: string): Promise<any[]> {
   try {
     const userItems = await storage.getClothingItems(userId);
@@ -160,7 +190,15 @@ Generate 3-6 outfit combinations${occasion ? ` for ${occasion}` : ''} and return
   ]
 }
 
-Focus on color coordination, style compatibility, and occasion appropriateness. Only return valid JSON.`;
+IMPORTANT RULES:
+1. Each outfit must only include ONE item per body area:
+   - Maximum ONE item from categories: tops, bottoms, dresses, outerwear
+   - Maximum ONE item from category: shoes
+   - Multiple accessories are allowed (belts, hats, jewelry, etc.)
+2. Never combine items from the same category (e.g., don't pair two tops or two bottoms)
+3. A complete outfit should have at minimum: one top + one bottom OR one dress
+4. Focus on color coordination, style compatibility, and occasion appropriateness
+5. Only return valid JSON with no additional text.`;
 
     const result = await model.generateContent([prompt]);
     const response = await result.response;
@@ -178,7 +216,18 @@ Focus on color coordination, style compatibility, and occasion appropriateness. 
       
       console.log("Cleaned outfit suggestions response:", cleanText);
       const parsed = JSON.parse(cleanText);
-      return parsed.outfits || [];
+      const outfits = parsed.outfits || [];
+      
+      // Filter out invalid outfit combinations
+      const validOutfits = outfits.filter((outfit: any) => {
+        if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) {
+          return false;
+        }
+        return validateOutfitCombination(outfit.item_ids, userItems);
+      });
+      
+      console.log(`Filtered ${outfits.length} outfits down to ${validOutfits.length} valid combinations`);
+      return validOutfits;
     } catch (parseError) {
       console.error("Failed to parse outfit suggestions:", text);
       console.error("Parse error:", parseError);
