@@ -1121,6 +1121,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User profile endpoints
+  app.get("/api/user/profile", async (req, res) => {
+    try {
+      const user = await storage.getUser(DEMO_USER_ID);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Failed to get user profile:", error);
+      res.status(500).json({ error: "Failed to get user profile" });
+    }
+  });
+
+  app.put("/api/user/profile", async (req, res) => {
+    try {
+      const validatedData = updateUserProfileSchema.parse(req.body);
+      const updatedUser = await storage.updateUserProfile(DEMO_USER_ID, validatedData);
+      
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Failed to update user profile:", error);
+      res.status(500).json({ error: "Failed to update user profile" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
