@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Sparkles, Menu } from "lucide-react";
+import { Sparkles, Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -33,6 +33,12 @@ export function Navigation() {
                 {item.label}
               </a>
             ))}
+            <Link href="/profile">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Profile
+              </Button>
+            </Link>
           </div>
 
           <Sheet>
@@ -52,6 +58,10 @@ export function Navigation() {
                     {item.label}
                   </a>
                 ))}
+                <Link href="/profile" className="text-gray-700 hover:text-indigo-500 transition-colors text-lg flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Profile
+                </Link>
               </div>
             </SheetContent>
           </Sheet>

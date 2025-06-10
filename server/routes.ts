@@ -874,12 +874,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Serve uploaded images
+  // Serve uploaded images with proper headers
   app.use('/uploads', (req, res, next) => {
-    const filePath = path.join(uploadDir, req.path);
+    const fileName = req.path.slice(1); // Remove leading slash
+    const filePath = path.join(uploadDir, fileName);
+    
     if (fs.existsSync(filePath)) {
+      // Set proper content type for images
+      const ext = path.extname(fileName).toLowerCase();
+      const contentType = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp'
+      }[ext] || 'image/jpeg';
+      
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
       res.sendFile(filePath);
     } else {
+      console.error(`Image not found: ${filePath}`);
       res.status(404).json({ error: "Image not found" });
     }
   });

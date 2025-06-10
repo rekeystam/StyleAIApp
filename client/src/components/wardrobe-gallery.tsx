@@ -168,6 +168,19 @@ export function WardrobeGallery() {
                       src={item.imageUrl}
                       alt={item.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        // Fallback to a placeholder if image fails to load
+                        const target = e.target as HTMLImageElement;
+                        target.src = `data:image/svg+xml;base64,${btoa(`
+                          <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="200" height="200" fill="#f3f4f6"/>
+                            <rect x="70" y="70" width="60" height="60" fill="#d1d5db"/>
+                            <text x="100" y="150" text-anchor="middle" fill="#6b7280" font-size="12" font-family="Arial">
+                              ${item.category}
+                            </text>
+                          </svg>
+                        `)}`;
+                      }}
                     />
                   </div>
                   <CardContent className={`p-4 ${viewMode === 'list' ? 'flex-1' : ''}`}>
