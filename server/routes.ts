@@ -39,6 +39,66 @@ const upload = multer({
 // Initialize Google Gemini AI - will be initialized when needed
 let genAI: GoogleGenerativeAI;
 
+// Weather API helper functions
+async function fetchWeatherData(location: string): Promise<WeatherData | null> {
+  try {
+    // Check if we have cached weather data
+    const cached = await storage.getWeatherData(location);
+    if (cached && cached.timestamp && (Date.now() - cached.timestamp.getTime()) < 3600000) {
+      return cached; // Return cached data if less than 1 hour old
+    }
+
+    // For demo purposes, generate realistic weather data based on location
+    // In production, this would use a real weather API like OpenWeatherMap
+    const weatherConditions = ['sunny', 'cloudy', 'rainy', 'snowy'];
+    const baseTemp = location.toLowerCase().includes('new york') ? 15 : 20;
+    const temp = baseTemp + Math.floor(Math.random() * 20) - 10;
+    
+    const weatherData = await storage.createWeatherData({
+      location,
+      temperature: temp,
+      condition: weatherConditions[Math.floor(Math.random() * weatherConditions.length)],
+      humidity: 40 + Math.floor(Math.random() * 40),
+      windSpeed: Math.floor(Math.random() * 25)
+    });
+    
+    return weatherData;
+  } catch (error) {
+    console.error('Error fetching weather data:', error);
+    return null;
+  }
+}
+
+async function detectUserLocation(req: any): Promise<string> {
+  // Try to get location from user profile first
+  const userId = req.session?.user?.id || 1;
+  const user = await storage.getUser(userId);
+  
+  if (user?.location) {
+    return user.location;
+  }
+  
+  // Fallback to IP-based detection (simplified)
+  // In production, use a service like IPGeolocation API
+  return "New York, NY";
+}
+
+function getSeasonFromTemperature(temp: number): string {
+  if (temp < 5) return 'winter';
+  if (temp < 15) return 'fall';
+  if (temp < 25) return 'spring';
+  return 'summer';
+}
+
+function getTimeOfDay(): string {
+  const hour = new Date().getHours();
+  if (hour < 6) return 'night';
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  if (hour < 22) return 'evening';
+  return 'night';
+}
+
 async function analyzeClothingImage(imagePath: string): Promise<any> {
   try {
     // Initialize genAI if not already done
@@ -268,9 +328,68 @@ function generateUniqueStyleName(occasion: string, items: ClothingItem[], usedNa
 // Global storage for preventing duplicate suggestions per session
 const userSuggestionHistory = new Map<number, Set<string>>();
 
+// Shopping recommendations logic
+async function generateShoppingRecommendations(userId: number, outfits: any[], userItems: ClothingItem[], weatherData?: WeatherData): Promise<void> {
+  const lowConfidenceOutfits = outfits.filter(outfit => outfit.confidence < 70);
+  
+  if (lowConfidenceOutfits.length === 0) return;
+  
+  // Analyze wardrobe gaps
+  const categories = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes', 'accessories'];
+  const userCategories = new Set(userItems.map(item => item.category));
+  const missingCategories = categories.filter(cat => !userCategories.has(cat));
+  
+  // Weather-specific recommendations
+  const weatherRecommendations: string[] = [];
+  if (weatherData) {
+    const temp = weatherData.temperature;
+    const condition = weatherData.condition.toLowerCase();
+    
+    if (temp < 5) {
+      weatherRecommendations.push('warm coat', 'wool sweater', 'thermal layers', 'winter boots');
+    } else if (temp > 25) {
+      weatherRecommendations.push('light cotton shirt', 'shorts', 'sandals', 'sun hat');
+    }
+    
+    if (condition === 'rainy') {
+      weatherRecommendations.push('waterproof jacket', 'rain boots', 'umbrella');
+    }
+  }
+  
+  // Color gap analysis
+  const userColors = new Set(userItems.flatMap(item => item.colors.map(c => c.toLowerCase())));
+  const essentialColors = ['black', 'white', 'navy', 'grey'];
+  const missingColors = essentialColors.filter(color => !userColors.has(color));
+  
+  // Generate recommendations
+  const recommendations: string[] = [];
+  
+  if (missingCategories.includes('outerwear')) {
+    recommendations.push('versatile blazer or cardigan for layering');
+  }
+  if (missingCategories.includes('shoes')) {
+    recommendations.push('comfortable walking shoes or versatile flats');
+  }
+  if (missingColors.length > 0) {
+    recommendations.push(`${missingColors.join(' or ')} colored basics for versatile mixing`);
+  }
+  
+  recommendations.push(...weatherRecommendations);
+  
+  if (recommendations.length > 0) {
+    await storage.createShoppingRecommendation({
+      userId,
+      category: 'wardrobe_gaps',
+      reason: `Low outfit confidence (${lowConfidenceOutfits.length} outfits below 70% match)`,
+      suggestedItems: JSON.stringify(recommendations.slice(0, 5)),
+      confidence: Math.round(lowConfidenceOutfits.reduce((sum, outfit) => sum + outfit.confidence, 0) / lowConfidenceOutfits.length)
+    });
+  }
+}
 
 
-async function generateOutfitSuggestions(userId: number, occasion?: string): Promise<any[]> {
+
+async function generateOutfitSuggestions(userId: number, occasion?: string, weatherData?: WeatherData, userProfile?: User): Promise<any[]> {
   const userItems = await storage.getClothingItems(userId);
   
   if (userItems.length < 2) {
@@ -284,7 +403,6 @@ async function generateOutfitSuggestions(userId: number, occasion?: string): Pro
   const previousSuggestions = userSuggestionHistory.get(userId)!;
 
   try {
-
     // Initialize genAI if not already done
     if (!genAI) {
       const apiKey = process.env.GOOGLE_API_KEY;
@@ -342,44 +460,109 @@ async function generateOutfitSuggestions(userId: number, occasion?: string): Pro
       return { ...item, genderStyle };
     });
 
-    const prompt = `You are an expert AI Fashion Stylist creating diverse, wearable outfit combinations.
+    // Build comprehensive context for AI styling
+    const weatherContext = weatherData ? {
+      temperature: weatherData.temperature,
+      condition: weatherData.condition,
+      humidity: weatherData.humidity,
+      windSpeed: weatherData.windSpeed,
+      season: getSeasonFromTemperature(weatherData.temperature),
+      timeOfDay: getTimeOfDay()
+    } : null;
+
+    const userContext = userProfile ? {
+      bodyType: userProfile.bodyType,
+      skinTone: userProfile.skinTone,
+      age: userProfile.age,
+      height: userProfile.height,
+      gender: userProfile.gender,
+      preferences: userProfile.preferences ? JSON.parse(userProfile.preferences) : null
+    } : null;
+
+    // Filter items by weather suitability
+    const weatherSuitableItems = weatherData ? userItems.filter(item => {
+      if (!item.weatherSuitability) return true;
+      const temp = weatherData.temperature;
+      const condition = weatherData.condition.toLowerCase();
+      
+      // Temperature-based filtering
+      if (temp < 5 && !item.weatherSuitability.includes('cold')) return false;
+      if (temp > 25 && !item.weatherSuitability.includes('sun')) return false;
+      if (condition === 'rainy' && !item.weatherSuitability.includes('rain')) return false;
+      
+      return true;
+    }) : userItems;
+
+    const prompt = `You are an expert AI Fashion Stylist creating personalized, weather-appropriate outfit combinations.
 
 AVAILABLE WARDROBE ITEMS: ${JSON.stringify(itemsDescription)}
 
+WEATHER CONTEXT: ${weatherContext ? JSON.stringify(weatherContext) : 'No specific weather data'}
+
+USER PROFILE: ${userContext ? JSON.stringify(userContext) : 'No specific user profile'}
+
 PREVIOUS COMBINATIONS TO AVOID: ${Array.from(previousSuggestions).join(', ')}
 
+PERSONALIZATION GUIDELINES:
+${userContext ? `
+- Body Type: ${userContext.bodyType || 'Not specified'} - Choose flattering silhouettes
+- Skin Tone: ${userContext.skinTone || 'Not specified'} - Select complementary colors
+- Age: ${userContext.age || 'Not specified'} - Age-appropriate styling
+- Gender: ${userContext.gender || 'Not specified'} - Respect style preferences
+- Preferences: ${userContext.preferences ? JSON.stringify(userContext.preferences) : 'None specified'}
+` : '- No specific user profile available'}
+
+WEATHER CONSIDERATIONS:
+${weatherContext ? `
+- Temperature: ${weatherContext.temperature}°C (${weatherContext.season})
+- Condition: ${weatherContext.condition}
+- Time: ${weatherContext.timeOfDay}
+- Humidity: ${weatherContext.humidity}%
+- Wind: ${weatherContext.windSpeed} km/h
+
+WEATHER-BASED STYLING:
+- For cold weather (< 5°C): Include warm layers, outerwear, closed shoes
+- For cool weather (5-15°C): Light layers, long sleeves, closed shoes
+- For mild weather (15-25°C): Versatile pieces, light layers optional
+- For warm weather (> 25°C): Breathable fabrics, light colors, minimal layers
+- For rainy weather: Water-resistant materials, closed shoes, layering
+- For windy weather: Fitted clothes, avoid loose flowing items
+` : '- Consider general seasonal appropriateness'}
+
 STYLING GUIDELINES:
-- Create 6-8 different outfit combinations using the available items
+- Create 5-6 different outfit combinations using available items
 - Each outfit needs 2-4 clothing items for a complete look
-- Focus on practical, wearable combinations
+- Focus on practical, weather-appropriate combinations
 - Include variety: casual, business, formal, and creative looks
-- Avoid repeating the exact same item combinations
+- Avoid repeating exact item combinations
+- Consider user's body type and preferences
 
 OUTFIT REQUIREMENTS:
 - Each outfit must have either: (top + bottom) OR (dress) OR (outerwear + other items)
 - Only one bottom piece per outfit (pants, skirt, or dress)
-- Colors should complement each other
-- Consider the occasion and season
+- Colors should complement user's skin tone and preferences
+- Weather-appropriate warmth level and fabric choices
+- Confidence score based on weather suitability and style match
 
-AVOID:
-- Duplicate item combinations from previous suggestions
-- More than one pair of pants/skirts in the same outfit
-- Clashing bright colors (orange + pink, bright green + red)
-✅ Colors follow approved harmony rules
-✅ Appropriate for specified occasion: ${occasion || 'any'}
-✅ Completely unique combination
+CONFIDENCE SCORING:
+- 90-100: Perfect weather match, ideal style, great color harmony
+- 80-89: Good weather match, suitable style, good colors
+- 70-79: Adequate weather match, acceptable style
+- Below 70: Poor weather match or style compatibility
 
-Generate 3-5 COMPLETELY NEW outfit combinations in this JSON format:
+Generate 5-6 COMPLETELY NEW outfit combinations in this JSON format:
 {
   "outfits": [
     {
-      "name": "unique descriptive name (never used before)",
+      "name": "unique descriptive name",
       "occasion": "${occasion || 'casual'}",
       "item_ids": [1, 2, 3],
       "confidence": 85,
-      "description": "explain why colors work together and style compatibility",
-      "styling_tips": "specific practical advice for wearing this outfit",
-      "weather": "appropriate weather conditions"
+      "description": "explain weather appropriateness, color harmony, and style compatibility",
+      "styling_tips": "specific advice for the user's body type and preferences",
+      "weather": "specific weather conditions this outfit suits",
+      "temperature_range": "5-15°C",
+      "season_suitability": "fall/winter"
     }
   ]
 }
@@ -439,25 +622,51 @@ RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
             usedNames.add(outfit.name);
           }
           
-          // Enhanced color coordination validation
+          // Enhanced validation with weather-based confidence adjustments
           const selectedItems = userItems.filter(item => outfit.item_ids.includes(item.id));
-          const allColors = selectedItems.flatMap(item => item.colors);
-          const uniqueColors = Array.from(new Set(allColors));
           
-          // Strict color harmony enforcement
-          const hasApprovedColors = 
-            (uniqueColors.includes('navy') && uniqueColors.includes('white')) ||
-            (uniqueColors.includes('black') && uniqueColors.includes('white')) ||
-            (uniqueColors.includes('burgundy') && uniqueColors.includes('cream')) ||
-            uniqueColors.every(color => ['white', 'black', 'grey', 'navy', 'beige', 'khaki'].includes(color));
-          
-          if (hasApprovedColors) {
-            outfit.confidence = Math.min(100, (outfit.confidence || 80) + 10);
+          // Weather-based confidence adjustments
+          if (weatherData) {
+            const temp = weatherData.temperature;
+            const condition = weatherData.condition.toLowerCase();
+            
+            // Check if items are weather-appropriate
+            const weatherAppropriate = selectedItems.every(item => {
+              if (!item.weatherSuitability) return true;
+              
+              // Temperature appropriateness
+              if (temp < 5 && item.warmthLevel && item.warmthLevel < 3) return false;
+              if (temp > 25 && item.warmthLevel && item.warmthLevel > 2) return false;
+              
+              // Condition appropriateness
+              if (condition === 'rainy' && !item.weatherSuitability.includes('rain')) return false;
+              
+              return true;
+            });
+            
+            if (!weatherAppropriate) {
+              outfit.confidence = Math.max(50, (outfit.confidence || 80) - 20);
+            } else {
+              outfit.confidence = Math.min(100, (outfit.confidence || 80) + 5);
+            }
           }
           
-          // Penalty for too many colors
-          if (uniqueColors.length > 3) {
-            outfit.confidence = Math.max(60, (outfit.confidence || 80) - 15);
+          // User personalization adjustments
+          if (userContext?.preferences) {
+            const preferences = userContext.preferences;
+            const outfitColors = selectedItems.flatMap(item => item.colors);
+            
+            // Boost confidence for preferred colors
+            if (preferences.favoriteColors?.some((color: string) => 
+              outfitColors.some(outfitColor => outfitColor.toLowerCase().includes(color.toLowerCase())))) {
+              outfit.confidence = Math.min(100, (outfit.confidence || 80) + 5);
+            }
+            
+            // Reduce confidence for avoided colors
+            if (preferences.avoidColors?.some((color: string) => 
+              outfitColors.some(outfitColor => outfitColor.toLowerCase().includes(color.toLowerCase())))) {
+              outfit.confidence = Math.max(60, (outfit.confidence || 80) - 10);
+            }
           }
           
           return outfit;
@@ -467,6 +676,9 @@ RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
       
       console.log(`Professional Fashion Styling: Filtered ${outfits.length} outfits down to ${validOutfits.length} expert-validated combinations`);
       console.log(`Duplicate prevention: ${previousSuggestions.size} combinations tracked for user ${userId}`);
+      
+      // Generate shopping recommendations for low-confidence outfits
+      await generateShoppingRecommendations(userId, validOutfits, userItems, weatherData);
       
       // Fallback: If no valid outfits after filtering, generate basic combinations
       if (validOutfits.length === 0 && userItems.length >= 2) {
@@ -700,12 +912,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get outfit suggestions
+  // Get weather-based outfit suggestions with automatic location detection
   app.get("/api/outfits/suggestions", async (req, res) => {
     try {
       const { occasion } = req.query;
-      const suggestions = await generateOutfitSuggestions(DEMO_USER_ID, occasion as string);
-      res.json(suggestions);
+      
+      // Automatically detect user location
+      const location = await detectUserLocation(req);
+      
+      // Fetch current weather data
+      const weatherData = await fetchWeatherData(location);
+      
+      // Get user profile for personalization
+      const userProfile = await storage.getUser(DEMO_USER_ID);
+      
+      const suggestions = await generateOutfitSuggestions(
+        DEMO_USER_ID, 
+        occasion as string, 
+        weatherData || undefined,
+        userProfile || undefined
+      );
+      
+      res.json({
+        suggestions,
+        weatherData,
+        location,
+        userProfile: userProfile ? {
+          bodyType: userProfile.bodyType,
+          skinTone: userProfile.skinTone,
+          preferences: userProfile.preferences
+        } : null
+      });
     } catch (error) {
       console.error("Failed to get outfit suggestions:", error);
       res.status(500).json({ error: "Failed to generate outfit suggestions" });
