@@ -181,7 +181,7 @@ Only return valid JSON, no additional text.`;
   }
 }
 
-// FLEXIBLE: Fashion Stylist Validation System - Supporting Multi-Occasion Items
+// ULTRA-FLEXIBLE: Fashion Stylist Validation System - Supporting Multi-Occasion Items
 function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[]): boolean {
   const selectedItems = userItems.filter(item => itemIds.includes(item.id));
   
@@ -204,31 +204,32 @@ function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[])
     if (!['accessories', 'shoes'].includes(category) && count > 1) return false;
   }
   
-  // RULE 2: FLEXIBLE OUTFIT STRUCTURE
+  // RULE 2: ULTRA-FLEXIBLE OUTFIT STRUCTURE
   const hasTop = categoryCount['tops'] > 0;
   const hasBottom = categoryCount['bottoms'] > 0;
   const hasDress = categoryCount['dresses'] > 0;
   const hasOuterwear = categoryCount['outerwear'] > 0;
   const hasShoes = categoryCount['shoes'] > 0;
   
-  // Accept various outfit combinations
-  // Core requirement: either a dress OR (top + bottom) OR enough pieces to make an outfit
+  // Accept ANY reasonable combination - focus on completeness not style matching
   const coreOutfit = hasDress || (hasTop && hasBottom);
   const versatileOutfit = (hasTop && hasOuterwear) || (hasBottom && hasOuterwear) || selectedItems.length >= 3;
+  const minimalOutfit = selectedItems.length >= 2; // Even just two pieces can work
   
-  if (!coreOutfit && !versatileOutfit) return false;
+  if (!coreOutfit && !versatileOutfit && !minimalOutfit) return false;
   
-  // RULE 3: VERY RELAXED COLOR VALIDATION
+  // RULE 3: ULTRA-RELAXED COLOR VALIDATION
   const allColors = selectedItems.flatMap(item => item.colors.map(c => c.toLowerCase()));
   const uniqueColors = Array.from(new Set(allColors));
   
-  // Only block extremely clashing combinations
-  const forbiddenCombos = [
+  // Only block extremely clashing neon combinations
+  const extremeClashes = [
     ['neon orange', 'hot pink'], 
-    ['bright lime', 'hot magenta']
+    ['bright lime', 'hot magenta'],
+    ['fluorescent yellow', 'electric purple']
   ];
   
-  for (const [color1, color2] of forbiddenCombos) {
+  for (const [color1, color2] of extremeClashes) {
     const hasColor1 = uniqueColors.some(c => c.includes(color1));
     const hasColor2 = uniqueColors.some(c => c.includes(color2));
     if (hasColor1 && hasColor2) {
@@ -236,12 +237,15 @@ function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[])
     }
   }
   
-  // Allow up to 6 colors for creative styling
-  if (uniqueColors.length > 6) return false;
+  // Allow up to 8 colors for maximum creative freedom
+  if (uniqueColors.length > 8) return false;
   
-  // RULE 4: GENDER FLEXIBILITY
-  // Modern fashion allows mixing traditionally gendered items
-  // Only block if there are explicit contradictions in formal wear
+  // RULE 4: COMPLETE STYLE FLEXIBILITY
+  // Modern fashion allows ANY style mixing - business casual, smart casual, etc.
+  // Blazers can be casual, dress shoes can be casual, suits can be broken up
+  // NO STYLE RESTRICTIONS - let people express creativity
+  
+  // Only block truly impossible combinations
   const analysis = selectedItems.map(item => {
     try {
       return item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
@@ -250,17 +254,18 @@ function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[])
     }
   });
   
-  const hasFormalMenssuit = selectedItems.some(item => 
-    item.name.toLowerCase().includes('tuxedo') || 
-    (item.name.toLowerCase().includes('suit') && analysis.some(a => a.formality === 'very_formal'))
+  // Only prevent swimwear with winter coats type combinations
+  const hasSwimwear = selectedItems.some(item => 
+    item.name.toLowerCase().includes('bikini') || 
+    item.name.toLowerCase().includes('swimsuit')
   );
   
-  const hasFormalDress = selectedItems.some(item => 
-    item.category === 'dresses' && analysis.some(a => a.formality === 'very_formal')
+  const hasWinterCoat = selectedItems.some(item => 
+    item.name.toLowerCase().includes('winter coat') || 
+    item.name.toLowerCase().includes('parka')
   );
   
-  // Only reject if mixing very formal gendered pieces
-  if (hasFormalMenssuit && hasFormalDress) return false;
+  if (hasSwimwear && hasWinterCoat) return false;
   
   return true;
 }
@@ -522,8 +527,15 @@ STYLING GUIDELINES:
 - Each outfit needs 2-4 clothing items for a complete look
 - Focus on practical, weather-appropriate combinations
 - Include variety: casual, business, formal, and creative looks
-- Recognize that items can be versatile across occasions (blazers, loafers, etc.)
-- Show how the SAME ITEM can work for different occasions with different styling
+- VERSATILITY IS KEY: Recognize that most items can work for multiple occasions:
+  * Blazers: casual with jeans/chinos, business with dress pants, smart-casual with anything
+  * Dress shoes/loafers: casual with chinos, business with suits, smart-casual with dark jeans
+  * Button-down shirts: casual untucked with jeans, business tucked with trousers
+  * Suits: formal as complete sets, casual when pieces are mixed separately
+  * Jackets: business appropriate AND casual depending on styling
+  * Quality shoes: work for both professional and casual settings
+- Show how the SAME VERSATILE ITEM can work across different occasions
+- Style mixing is encouraged - business pieces can be styled casually and vice versa
 - Avoid repeating exact item combinations
 - Consider user's body type and preferences
 
