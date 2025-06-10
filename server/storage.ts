@@ -1,9 +1,17 @@
-import { users, clothingItems, outfits, type User, type InsertUser, type ClothingItem, type InsertClothingItem, type Outfit, type InsertOutfit } from "@shared/schema";
+import { 
+  users, clothingItems, outfits, weatherData, shoppingRecommendations,
+  type User, type InsertUser, type UpdateUserProfile,
+  type ClothingItem, type InsertClothingItem, 
+  type Outfit, type InsertOutfit,
+  type WeatherData, type InsertWeatherData,
+  type ShoppingRecommendation, type InsertShoppingRecommendation
+} from "@shared/schema";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserProfile(id: number, profile: UpdateUserProfile): Promise<User | undefined>;
   
   getClothingItems(userId: number): Promise<ClothingItem[]>;
   getClothingItem(id: number): Promise<ClothingItem | undefined>;
@@ -15,40 +23,64 @@ export interface IStorage {
   createOutfit(outfit: InsertOutfit): Promise<Outfit>;
   updateOutfit(id: number, updates: Partial<Outfit>): Promise<Outfit | undefined>;
   deleteOutfit(id: number): Promise<boolean>;
+  
+  getWeatherData(location: string): Promise<WeatherData | undefined>;
+  createWeatherData(weather: InsertWeatherData): Promise<WeatherData>;
+  
+  getShoppingRecommendations(userId: number): Promise<ShoppingRecommendation[]>;
+  createShoppingRecommendation(recommendation: InsertShoppingRecommendation): Promise<ShoppingRecommendation>;
+  deleteShoppingRecommendation(id: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private clothingItems: Map<number, ClothingItem>;
   private outfits: Map<number, Outfit>;
+  private weatherData: Map<string, WeatherData>;
+  private shoppingRecommendations: Map<number, ShoppingRecommendation>;
   private currentUserId: number;
   private currentClothingItemId: number;
   private currentOutfitId: number;
+  private currentWeatherDataId: number;
+  private currentShoppingRecommendationId: number;
 
   constructor() {
     this.users = new Map();
     this.clothingItems = new Map();
     this.outfits = new Map();
+    this.weatherData = new Map();
+    this.shoppingRecommendations = new Map();
     this.currentUserId = 1;
     this.currentClothingItemId = 1;
     this.currentOutfitId = 1;
+    this.currentWeatherDataId = 1;
+    this.currentShoppingRecommendationId = 1;
     
-    // Add sample clothing items for testing
     this.initializeSampleData();
   }
   
   private initializeSampleData() {
-    // Create sample user
+    // Create sample user with personalization data
     const sampleUser: User = {
       id: 1,
       username: "demo",
-      password: "demo"
+      password: "demo",
+      bodyType: "hourglass",
+      skinTone: "warm",
+      age: 28,
+      height: 165,
+      gender: "female",
+      location: "New York, NY",
+      preferences: JSON.stringify({
+        favoriteColors: ["navy", "white", "black"],
+        preferredStyles: ["casual", "business_casual"],
+        avoidColors: ["orange"]
+      })
     };
     this.users.set(1, sampleUser);
     
-    // Add diverse sample clothing items for comprehensive testing
+    // Add comprehensive sample clothing items with weather data
     const sampleItems: ClothingItem[] = [
-      // Unisex basics
       {
         id: 1,
         userId: 1,
@@ -57,8 +89,11 @@ export class MemStorage implements IStorage {
         style: "casual",
         colors: ["white"],
         imageUrl: "/sample-tshirt.jpg",
-        aiAnalysis: '{"category":"tops","style":"casual","colors":["white"],"fabric_type":"cotton","pattern":"solid","formality":"casual","season":"all_season","fit":"regular","description":"Classic white cotton t-shirt","styling_tips":"Versatile basic piece","body_type_recommendations":"Suitable for all body types"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Classic white cotton t-shirt","formality":"casual","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 2,
+        weatherSuitability: ["sun", "mild"],
+        fabricType: "cotton"
       },
       {
         id: 2,
@@ -68,10 +103,12 @@ export class MemStorage implements IStorage {
         style: "casual",
         colors: ["blue"],
         imageUrl: "/sample-jeans.jpg",
-        aiAnalysis: '{"category":"bottoms","style":"casual","colors":["blue"],"fabric_type":"denim","pattern":"solid","formality":"casual","season":"all_season","fit":"regular","description":"Classic blue denim jeans","styling_tips":"Essential wardrobe staple","body_type_recommendations":"Suitable for all body types"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Classic blue denim jeans","formality":"casual","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 3,
+        weatherSuitability: ["sun", "mild", "cool"],
+        fabricType: "denim"
       },
-      // Masculine business wear
       {
         id: 3,
         userId: 1,
@@ -80,21 +117,26 @@ export class MemStorage implements IStorage {
         style: "business",
         colors: ["navy"],
         imageUrl: "/sample-business-shirt.jpg",
-        aiAnalysis: '{"category":"tops","style":"business","colors":["navy"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Professional navy dress shirt for men","styling_tips":"Perfect for office wear with ties","body_type_recommendations":"Tailored fit for professional appearance"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Professional navy dress shirt","formality":"business_casual","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 2,
+        weatherSuitability: ["sun", "mild", "cool"],
+        fabricType: "cotton"
       },
       {
         id: 4,
         userId: 1,
         name: "Khaki Chinos",
         category: "bottoms",
-        style: "business",
+        style: "business_casual",
         colors: ["khaki"],
         imageUrl: "/sample-chinos.jpg",
-        aiAnalysis: '{"category":"bottoms","style":"business","colors":["khaki"],"fabric_type":"cotton","pattern":"solid","formality":"business_casual","season":"all_season","fit":"slim","description":"Smart khaki chino pants","styling_tips":"Great for business casual looks","body_type_recommendations":"Suitable for all body types"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Smart casual khaki chinos","formality":"business_casual","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 3,
+        weatherSuitability: ["sun", "mild"],
+        fabricType: "cotton"
       },
-      // Feminine pieces
       {
         id: 5,
         userId: 1,
@@ -103,42 +145,53 @@ export class MemStorage implements IStorage {
         style: "formal",
         colors: ["black"],
         imageUrl: "/sample-dress.jpg",
-        aiAnalysis: '{"category":"dresses","style":"formal","colors":["black"],"fabric_type":"polyester","pattern":"solid","formality":"formal","season":"all_season","fit":"fitted","description":"Classic little black dress","styling_tips":"Perfect for evening events and dates","body_type_recommendations":"Flattering A-line silhouette"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Elegant little black dress","formality":"formal","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 2,
+        weatherSuitability: ["mild", "cool"],
+        fabricType: "polyester"
       },
       {
         id: 6,
         userId: 1,
-        name: "Floral Blouse",
+        name: "Floral Print Blouse",
         category: "tops",
-        style: "casual",
+        style: "feminine",
         colors: ["pink", "white"],
         imageUrl: "/sample-blouse.jpg",
-        aiAnalysis: '{"category":"tops","style":"casual","colors":["pink","white"],"fabric_type":"chiffon","pattern":"floral","formality":"smart_casual","season":"spring","fit":"regular","description":"Feminine floral blouse with delicate pattern","styling_tips":"Pairs beautifully with skirts or dress pants","body_type_recommendations":"Loose fit suitable for all body types"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Feminine floral print blouse","formality":"smart_casual","season":"spring_summer"}',
+        isVerified: true,
+        warmthLevel: 2,
+        weatherSuitability: ["sun", "mild"],
+        fabricType: "chiffon"
       },
       {
         id: 7,
         userId: 1,
         name: "High-Waisted Black Trousers",
         category: "bottoms",
-        style: "business",
+        style: "professional",
         colors: ["black"],
         imageUrl: "/sample-trousers.jpg",
-        aiAnalysis: '{"category":"bottoms","style":"business","colors":["black"],"fabric_type":"wool","pattern":"solid","formality":"business_casual","season":"all_season","fit":"high_waisted","description":"Elegant high-waisted black trousers","styling_tips":"Professional look when paired with blouses","body_type_recommendations":"High waist creates flattering silhouette"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Professional high-waisted trousers","formality":"business_casual","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 3,
+        weatherSuitability: ["mild", "cool"],
+        fabricType: "wool_blend"
       },
-      // Accessories and shoes
       {
         id: 8,
         userId: 1,
         name: "Brown Leather Belt",
         category: "accessories",
-        style: "business",
+        style: "classic",
         colors: ["brown"],
         imageUrl: "/sample-belt.jpg",
-        aiAnalysis: '{"category":"accessories","style":"business","colors":["brown"],"fabric_type":"leather","pattern":"solid","formality":"business_casual","season":"all_season","fit":"adjustable","description":"Quality brown leather belt","styling_tips":"Complements business and casual outfits","body_type_recommendations":"Universal accessory"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Classic brown leather belt","formality":"versatile","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 1,
+        weatherSuitability: ["sun", "mild", "cool", "rain"],
+        fabricType: "leather"
       },
       {
         id: 9,
@@ -148,8 +201,11 @@ export class MemStorage implements IStorage {
         style: "formal",
         colors: ["black"],
         imageUrl: "/sample-pumps.jpg",
-        aiAnalysis: '{"category":"shoes","style":"formal","colors":["black"],"fabric_type":"leather","pattern":"solid","formality":"formal","season":"all_season","fit":"pointed_toe","description":"Classic black leather pump heels","styling_tips":"Perfect for dresses and business attire","body_type_recommendations":"Elongates legs and adds elegance"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Classic black leather pumps","formality":"formal","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 1,
+        weatherSuitability: ["sun", "mild", "cool"],
+        fabricType: "leather"
       },
       {
         id: 10,
@@ -159,39 +215,58 @@ export class MemStorage implements IStorage {
         style: "casual",
         colors: ["white"],
         imageUrl: "/sample-sneakers.jpg",
-        aiAnalysis: '{"category":"shoes","style":"casual","colors":["white"],"fabric_type":"canvas","pattern":"solid","formality":"casual","season":"all_season","fit":"regular","description":"Clean white canvas sneakers","styling_tips":"Perfect for casual outfits and weekend wear","body_type_recommendations":"Comfortable and versatile for all"}',
-        isVerified: true
+        aiAnalysis: '{"description":"Comfortable white sneakers","formality":"casual","season":"all_season"}',
+        isVerified: true,
+        warmthLevel: 2,
+        weatherSuitability: ["sun", "mild"],
+        fabricType: "synthetic"
       },
-      // Additional variety
       {
         id: 11,
         userId: 1,
-        name: "Burgundy Cardigan",
-        category: "outerwear",
-        style: "casual",
-        colors: ["burgundy"],
-        imageUrl: "/sample-cardigan.jpg",
-        aiAnalysis: '{"category":"outerwear","style":"casual","colors":["burgundy"],"fabric_type":"wool","pattern":"solid","formality":"smart_casual","season":"autumn","fit":"regular","description":"Cozy burgundy knit cardigan","styling_tips":"Perfect layering piece for transitional weather","body_type_recommendations":"Flattering drape for all body types"}',
-        isVerified: true
+        name: "Grey Wool Skirt",
+        category: "bottoms",
+        style: "professional",
+        colors: ["grey"],
+        imageUrl: "/sample-skirt.jpg",
+        aiAnalysis: '{"description":"Professional grey wool skirt","formality":"business_casual","season":"fall_winter"}',
+        isVerified: true,
+        warmthLevel: 3,
+        weatherSuitability: ["cool", "cold"],
+        fabricType: "wool"
       },
       {
         id: 12,
         userId: 1,
-        name: "Grey Wool Skirt",
-        category: "bottoms",
-        style: "business",
-        colors: ["grey"],
-        imageUrl: "/sample-skirt.jpg",
-        aiAnalysis: '{"category":"bottoms","style":"business","colors":["grey"],"fabric_type":"wool","pattern":"solid","formality":"business_casual","season":"autumn","fit":"a_line","description":"Professional grey wool A-line skirt","styling_tips":"Pairs well with blouses and blazers","body_type_recommendations":"A-line cut flatters most body types"}',
-        isVerified: true
+        name: "Burgundy Cardigan",
+        category: "outerwear",
+        style: "cozy",
+        colors: ["burgundy"],
+        imageUrl: "/sample-cardigan.jpg",
+        aiAnalysis: '{"description":"Cozy burgundy cardigan","formality":"casual","season":"fall_winter"}',
+        isVerified: true,
+        warmthLevel: 4,
+        weatherSuitability: ["cool", "cold"],
+        fabricType: "wool"
       }
     ];
-    
+
     sampleItems.forEach(item => {
       this.clothingItems.set(item.id, item);
+      this.currentClothingItemId = Math.max(this.currentClothingItemId, item.id + 1);
     });
     
-    this.currentClothingItemId = 13;
+    // Add sample weather data
+    const sampleWeather: WeatherData = {
+      id: 1,
+      location: "New York, NY",
+      temperature: 22,
+      condition: "sunny",
+      humidity: 55,
+      windSpeed: 10,
+      timestamp: new Date()
+    };
+    this.weatherData.set("New York, NY", sampleWeather);
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -199,22 +274,42 @@ export class MemStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    for (const user of this.users.values()) {
+      if (user.username === username) {
+        return user;
+      }
+    }
+    return undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
+    const user: User = { 
+      ...insertUser, 
+      id,
+      bodyType: null,
+      skinTone: null,
+      age: null,
+      height: null,
+      gender: null,
+      location: null,
+      preferences: null
+    };
     this.users.set(id, user);
     return user;
   }
 
+  async updateUserProfile(id: number, profile: UpdateUserProfile): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, ...profile };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
   async getClothingItems(userId: number): Promise<ClothingItem[]> {
-    return Array.from(this.clothingItems.values()).filter(
-      (item) => item.userId === userId
-    );
+    return Array.from(this.clothingItems.values()).filter(item => item.userId === userId);
   }
 
   async getClothingItem(id: number): Promise<ClothingItem | undefined> {
@@ -225,9 +320,12 @@ export class MemStorage implements IStorage {
     const id = this.currentClothingItemId++;
     const item: ClothingItem = { 
       ...insertItem, 
-      id, 
+      id,
       isVerified: false,
-      aiAnalysis: insertItem.aiAnalysis || null
+      aiAnalysis: null,
+      warmthLevel: insertItem.warmthLevel ?? null,
+      weatherSuitability: insertItem.weatherSuitability ?? null,
+      fabricType: insertItem.fabricType ?? null
     };
     this.clothingItems.set(id, item);
     return item;
@@ -247,19 +345,21 @@ export class MemStorage implements IStorage {
   }
 
   async getOutfits(userId: number): Promise<Outfit[]> {
-    return Array.from(this.outfits.values()).filter(
-      (outfit) => outfit.userId === userId
-    );
+    return Array.from(this.outfits.values()).filter(outfit => outfit.userId === userId);
   }
 
   async createOutfit(insertOutfit: InsertOutfit): Promise<Outfit> {
     const id = this.currentOutfitId++;
     const outfit: Outfit = { 
       ...insertOutfit, 
-      id, 
+      id,
       isSaved: false,
-      occasion: insertOutfit.occasion ?? null,
-      aiConfidence: insertOutfit.aiConfidence ?? null
+      occasion: null,
+      aiConfidence: null,
+      weatherConditions: insertOutfit.weatherConditions ?? null,
+      temperature: insertOutfit.temperature ?? null,
+      seasonality: insertOutfit.seasonality ?? null,
+      timeOfDay: insertOutfit.timeOfDay ?? null
     };
     this.outfits.set(id, outfit);
     return outfit;
@@ -276,6 +376,40 @@ export class MemStorage implements IStorage {
 
   async deleteOutfit(id: number): Promise<boolean> {
     return this.outfits.delete(id);
+  }
+
+  async getWeatherData(location: string): Promise<WeatherData | undefined> {
+    return this.weatherData.get(location);
+  }
+
+  async createWeatherData(weather: InsertWeatherData): Promise<WeatherData> {
+    const id = this.currentWeatherDataId++;
+    const data: WeatherData = { 
+      ...weather, 
+      id,
+      timestamp: new Date()
+    };
+    this.weatherData.set(weather.location, data);
+    return data;
+  }
+
+  async getShoppingRecommendations(userId: number): Promise<ShoppingRecommendation[]> {
+    return Array.from(this.shoppingRecommendations.values()).filter(rec => rec.userId === userId);
+  }
+
+  async createShoppingRecommendation(recommendation: InsertShoppingRecommendation): Promise<ShoppingRecommendation> {
+    const id = this.currentShoppingRecommendationId++;
+    const rec: ShoppingRecommendation = { 
+      ...recommendation, 
+      id,
+      created: new Date()
+    };
+    this.shoppingRecommendations.set(id, rec);
+    return rec;
+  }
+
+  async deleteShoppingRecommendation(id: number): Promise<boolean> {
+    return this.shoppingRecommendations.delete(id);
   }
 }
 

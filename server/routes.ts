@@ -1,7 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertClothingItemSchema, insertOutfitSchema, ClothingItem } from "@shared/schema";
+import { 
+  insertClothingItemSchema, 
+  insertOutfitSchema, 
+  updateUserProfileSchema,
+  insertWeatherDataSchema,
+  insertShoppingRecommendationSchema,
+  ClothingItem,
+  User,
+  WeatherData
+} from "@shared/schema";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import multer from "multer";
 import path from "path";
