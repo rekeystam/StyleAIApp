@@ -933,16 +933,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userProfile || undefined
       );
       
-      res.json({
-        suggestions,
-        weatherData,
-        location,
-        userProfile: userProfile ? {
-          bodyType: userProfile.bodyType,
-          skinTone: userProfile.skinTone,
-          preferences: userProfile.preferences
-        } : null
-      });
+      // Return suggestions directly for backward compatibility
+      res.json(suggestions);
     } catch (error) {
       console.error("Failed to get outfit suggestions:", error);
       res.status(500).json({ error: "Failed to generate outfit suggestions" });
@@ -960,13 +952,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Save outfit
+  // Save outfit with weather context
   app.post("/api/outfits", async (req, res) => {
     try {
+      const location = await detectUserLocation(req);
+      const weatherData = await fetchWeatherData(location);
+      
       const outfitData = {
         ...req.body,
         userId: DEMO_USER_ID,
         isSaved: true,
+        weatherConditions: weatherData ? JSON.stringify({
+          temperature: weatherData.temperature,
+          condition: weatherData.condition,
+          location: weatherData.location
+        }) : null,
+        temperature: weatherData?.temperature || null,
+        seasonality: weatherData ? getSeasonFromTemperature(weatherData.temperature) : null,
+        timeOfDay: getTimeOfDay()
       };
 
       const validatedData = insertOutfitSchema.parse(outfitData);
@@ -975,6 +978,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to save outfit:", error);
       res.status(500).json({ error: "Failed to save outfit" });
+    }
+  });
+
+  // User profile management
+  app.get("/api/user/profile", async (req, res) => {
+    try {
+      const user = await storage.getUser(DEMO_USER_ID);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const profile = {
+        bodyType: user.bodyType,
+        skinTone: user.skinTone,
+        age: user.age,
+        height: user.height,
+        gender: user.gender,
+        location: user.location,
+        preferences: user.preferences ? JSON.parse(user.preferences) : null
+      };
+      
+      res.json(profile);
+    } catch (error) {
+      console.error("Failed to get user profile:", error);
+      res.status(500).json({ error: "Failed to get user profile" });
+    }
+  });
+
+  app.put("/api/user/profile", async (req, res) => {
+    try {
+      const profileData = updateUserProfileSchema.parse(req.body);
+      
+      // If preferences are provided as an object, stringify them
+      if (profileData.preferences && typeof profileData.preferences === 'object') {
+        profileData.preferences = JSON.stringify(profileData.preferences);
+      }
+      
+      const updatedUser = await storage.updateUserProfile(DEMO_USER_ID, profileData);
+      
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      res.json({
+        bodyType: updatedUser.bodyType,
+        skinTone: updatedUser.skinTone,
+        age: updatedUser.age,
+        height: updatedUser.height,
+        gender: updatedUser.gender,
+        location: updatedUser.location,
+        preferences: updatedUser.preferences ? JSON.parse(updatedUser.preferences) : null
+      });
+    } catch (error) {
+      console.error("Failed to update user profile:", error);
+      res.status(500).json({ error: "Failed to update user profile" });
+    }
+  });
+
+  // Weather data API
+  app.get("/api/weather", async (req, res) => {
+    try {
+      const { location: queryLocation } = req.query;
+      const location = queryLocation as string || await detectUserLocation(req);
+      
+      const weatherData = await fetchWeatherData(location);
+      
+      if (!weatherData) {
+        return res.status(404).json({ error: "Weather data not available" });
+      }
+      
+      res.json({
+        ...weatherData,
+        season: getSeasonFromTemperature(weatherData.temperature),
+        timeOfDay: getTimeOfDay()
+      });
+    } catch (error) {
+      console.error("Failed to get weather data:", error);
+      res.status(500).json({ error: "Failed to get weather data" });
+    }
+  });
+
+  // Shopping recommendations API
+  app.get("/api/shopping/recommendations", async (req, res) => {
+    try {
+      const recommendations = await storage.getShoppingRecommendations(DEMO_USER_ID);
+      res.json(recommendations);
+    } catch (error) {
+      console.error("Failed to get shopping recommendations:", error);
+      res.status(500).json({ error: "Failed to get shopping recommendations" });
+    }
+  });
+
+  app.delete("/api/shopping/recommendations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteShoppingRecommendation(id);
+      
+      if (deleted) {
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: "Recommendation not found" });
+      }
+    } catch (error) {
+      console.error("Failed to delete shopping recommendation:", error);
+      res.status(500).json({ error: "Failed to delete shopping recommendation" });
+    }
+  });
+
+  // Manual shopping recommendation trigger
+  app.post("/api/shopping/analyze", async (req, res) => {
+    try {
+      const userItems = await storage.getClothingItems(DEMO_USER_ID);
+      const location = await detectUserLocation(req);
+      const weatherData = await fetchWeatherData(location);
+      
+      // Create mock outfits to analyze gaps
+      const mockOutfits = [{ confidence: 65, item_ids: [] }]; // Trigger recommendations
+      
+      await generateShoppingRecommendations(DEMO_USER_ID, mockOutfits, userItems, weatherData || undefined);
+      
+      const recommendations = await storage.getShoppingRecommendations(DEMO_USER_ID);
+      res.json(recommendations);
+    } catch (error) {
+      console.error("Failed to analyze shopping needs:", error);
+      res.status(500).json({ error: "Failed to analyze shopping needs" });
     }
   });
 
