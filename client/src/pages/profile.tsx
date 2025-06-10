@@ -85,13 +85,7 @@ export default function Profile() {
 
   const updateProfileMutation = useMutation({
     mutationFn: (data: UpdateUserProfile) => 
-      apiRequest("/api/user/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      }),
+      apiRequest("PUT", "/api/user/profile", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
       toast({
@@ -172,21 +166,7 @@ export default function Profile() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="username"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Username</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Your username" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
                   <FormField
                     control={form.control}
                     name="location"
@@ -194,7 +174,11 @@ export default function Profile() {
                       <FormItem>
                         <FormLabel>Location</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g., New York, NY" {...field} />
+                          <Input 
+                            placeholder="e.g., New York, NY" 
+                            {...field}
+                            value={field.value || ""}
+                          />
                         </FormControl>
                         <FormDescription>
                           Helps us provide weather-appropriate recommendations
@@ -216,8 +200,8 @@ export default function Profile() {
                           <Input 
                             type="number" 
                             placeholder="25" 
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || null)}
                           />
                         </FormControl>
                         <FormMessage />
@@ -235,8 +219,8 @@ export default function Profile() {
                           <Input 
                             type="number" 
                             placeholder="170" 
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || null)}
                           />
                         </FormControl>
                         <FormMessage />
@@ -252,7 +236,7 @@ export default function Profile() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Body Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select body type" />
@@ -280,7 +264,7 @@ export default function Profile() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Skin Tone</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select skin tone" />
@@ -308,7 +292,7 @@ export default function Profile() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Gender</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select gender" />
