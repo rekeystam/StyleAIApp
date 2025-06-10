@@ -123,10 +123,12 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
   "fabric_type": "cotton|denim|silk|wool|polyester|leather|other",
   "pattern": "solid|striped|floral|geometric|abstract|none",
   "formality": "very_casual|casual|smart_casual|business_casual|formal|very_formal",
+  "suitable_occasions": ["casual", "business", "formal", "smart_casual"],
+  "versatility_notes": "explain how this item can be styled for different occasions",
   "season": "spring|summer|fall|winter|all_season",
   "fit": "loose|regular|slim|tight",
   "description": "brief description of the item",
-  "styling_tips": "how to style this item",
+  "styling_tips": "how to style this item for different occasions",
   "body_type_recommendations": "which body types this works well for"
 }
 
@@ -472,8 +474,50 @@ async function generateOutfitSuggestions(userId: number, occasion?: string, weat
       preferences: userProfile.preferences ? JSON.parse(userProfile.preferences) : null
     } : null;
 
+    // Filter items by occasion suitability first
+    const occasionFilteredItems = userItems.filter(item => {
+      const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
+      const itemStyle = item.style?.toLowerCase() || 'casual';
+      const itemCategory = item.category?.toLowerCase() || '';
+      const itemName = item.name?.toLowerCase() || '';
+      
+      if (!occasion || occasion === 'casual') {
+        // Casual: allow most items, exclude very formal pieces
+        return !itemName.includes('suit') || !itemName.includes('tuxedo');
+      }
+      
+      if (occasion === 'business' || occasion === 'business_casual') {
+        // Business: prioritize professional items
+        const businessItems = [
+          'business', 'formal', 'professional', 'smart', 'dress',
+          'blazer', 'suit', 'shirt', 'trousers', 'chinos', 'pumps', 'loafers'
+        ];
+        
+        const isBusinessSuitable = businessItems.some(keyword => 
+          itemStyle.includes(keyword) || itemCategory.includes(keyword) || itemName.includes(keyword)
+        );
+        
+        // Also include versatile casual items that can be dressed up
+        const versatileCasual = itemCategory === 'tops' && !itemName.includes('t-shirt') ||
+                               itemCategory === 'bottoms' && (itemName.includes('chinos') || itemName.includes('trousers')) ||
+                               itemCategory === 'shoes' && !itemName.includes('sneakers');
+        
+        return isBusinessSuitable || versatileCasual;
+      }
+      
+      if (occasion === 'formal') {
+        // Formal: only dress up items
+        const formalItems = ['formal', 'dress', 'suit', 'blazer', 'pumps', 'heels', 'tie', 'elegant'];
+        return formalItems.some(keyword => 
+          itemStyle.includes(keyword) || itemCategory.includes(keyword) || itemName.includes(keyword)
+        );
+      }
+      
+      return true; // Default: include all items
+    });
+
     // Filter items by weather suitability
-    const weatherSuitableItems = weatherData ? userItems.filter(item => {
+    const weatherSuitableItems = weatherData ? occasionFilteredItems.filter(item => {
       if (!item.weatherSuitability) return true;
       const temp = weatherData.temperature;
       const condition = weatherData.condition.toLowerCase();
@@ -484,7 +528,7 @@ async function generateOutfitSuggestions(userId: number, occasion?: string, weat
       if (condition === 'rainy' && !item.weatherSuitability.includes('rain')) return false;
       
       return true;
-    }) : userItems;
+    }) : occasionFilteredItems;
 
     const prompt = `You are an expert AI Fashion Stylist creating personalized, weather-appropriate outfit combinations.
 
@@ -526,7 +570,10 @@ STYLING GUIDELINES:
 - Create 5-6 different outfit combinations using available items
 - Each outfit needs 2-4 clothing items for a complete look
 - Focus on practical, weather-appropriate combinations
-- Include variety: casual, business, formal, and creative looks
+- STRICTLY MATCH THE REQUESTED OCCASION: "${occasion || 'casual'}"
+- If occasion is "business": prioritize professional items like blazers, dress shirts, dress pants, formal shoes
+- If occasion is "formal": focus on suits, dresses, formal shoes, elegant pieces
+- If occasion is "casual": emphasize comfortable, relaxed pieces like jeans, t-shirts, sneakers
 - VERSATILITY IS KEY: Recognize that most items can work for multiple occasions:
   * Blazers: casual with jeans/chinos, business with dress pants, smart-casual with anything
   * Dress shoes/loafers: casual with chinos, business with suits, smart-casual with dark jeans
@@ -545,6 +592,8 @@ OUTFIT REQUIREMENTS:
 - Colors should complement user's skin tone and preferences
 - Weather-appropriate warmth level and fabric choices
 - Confidence score based on weather suitability and style match
+- CRITICAL: ALL outfits MUST match the requested occasion: "${occasion || 'casual'}"
+- Filter items by their suitability for the requested occasion
 - MULTI-OCCASION STYLING: Show how items can work across occasions:
   * Blazers: casual with jeans, business with dress pants
   * Loafers/dress shoes: casual with chinos, business with suits
