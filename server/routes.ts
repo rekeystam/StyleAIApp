@@ -874,6 +874,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Serve placeholder images for sample items
+  app.get('/sample-*.jpg', (req, res) => {
+    const filename = req.path.slice(1); // Remove leading slash
+    const itemName = filename.replace('sample-', '').replace('.jpg', '');
+    
+    // Generate SVG placeholder based on item type
+    const colorMap: Record<string, string> = {
+      'tshirt': '#3B82F6',
+      'jeans': '#1E40AF', 
+      'shirt': '#1F2937',
+      'chinos': '#D97706',
+      'dress': '#EC4899',
+      'blouse': '#F472B6',
+      'trousers': '#111827',
+      'belt': '#92400E',
+      'pumps': '#000000',
+      'sneakers': '#FFFFFF',
+      'skirt': '#6B7280',
+      'cardigan': '#7C2D12'
+    };
+    
+    const color = colorMap[itemName] || '#6B7280';
+    const strokeColor = color === '#FFFFFF' ? '#000000' : '#FFFFFF';
+    
+    const svg = `
+      <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+        <rect width="200" height="200" fill="${color}"/>
+        <rect x="50" y="50" width="100" height="100" fill="none" stroke="${strokeColor}" stroke-width="2" opacity="0.7"/>
+        <text x="100" y="170" text-anchor="middle" fill="${strokeColor}" font-size="14" font-family="Arial, sans-serif" opacity="0.8">
+          ${itemName.charAt(0).toUpperCase() + itemName.slice(1)}
+        </text>
+      </svg>
+    `;
+    
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(svg);
+  });
+
   // Serve uploaded images with proper headers
   app.use('/uploads', (req, res, next) => {
     const fileName = req.path.slice(1); // Remove leading slash
