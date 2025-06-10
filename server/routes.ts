@@ -567,10 +567,10 @@ WEATHER-BASED STYLING:
 ` : '- Consider general seasonal appropriateness'}
 
 STYLING GUIDELINES:
-- Create 5-6 different outfit combinations using available items
-- Each outfit needs 2-4 clothing items for a complete look
+- Create 4 different outfit combinations using available items
+- Each outfit can include up to six items, such as socks, accessories, hats, watches, ties, and sunglasses, if they are shown in the attached image and depend on the occasion
 - Focus on practical, weather-appropriate combinations
-- STRICTLY MATCH THE REQUESTED OCCASION: "${occasion || 'casual'}"
+- STRICTLY MATCH THE REQUESTED OCCASION: "${occasion}"
 - If occasion is "business": prioritize professional items like blazers, dress shirts, dress pants, formal shoes
 - If occasion is "formal": focus on suits, dresses, formal shoes, elegant pieces
 - If occasion is "casual": emphasize comfortable, relaxed pieces like jeans, t-shirts, sneakers
@@ -585,14 +585,16 @@ STYLING GUIDELINES:
 - Style mixing is encouraged - business pieces can be styled casually and vice versa
 - Avoid repeating exact item combinations
 - Consider user's body type and preferences
-
+- Color Coordination: Ensure outfit colors complement each other based on color theory
+- Weather Appropriateness: Consider temperature, precipitation, and time of year
+- Occasion Matching: Strictly match the suggested outfits to the requested occasion
 OUTFIT REQUIREMENTS:
 - Each outfit must have either: (top + bottom) OR (dress) OR (outerwear + other items)
 - Only one bottom piece per outfit (pants, skirt, or dress)
 - Colors should complement user's skin tone and preferences
 - Weather-appropriate warmth level and fabric choices
 - Confidence score based on weather suitability and style match
-- CRITICAL: ALL outfits MUST match the requested occasion: "${occasion || 'casual'}"
+- CRITICAL: ALL outfits MUST match the requested occasion: "${occasion}"
 - Filter items by their suitability for the requested occasion
 - MULTI-OCCASION STYLING: Show how items can work across occasions:
   * Blazers: casual with jeans, business with dress pants
@@ -611,7 +613,7 @@ Generate 5-6 COMPLETELY NEW outfit combinations in this JSON format:
   "outfits": [
     {
       "name": "unique descriptive name",
-      "occasion": "${occasion || 'casual'}",
+      "occasion": "${occasion}",
       "item_ids": [1, 2, 3],
       "confidence": 85,
       "description": "explain weather appropriateness, color harmony, and style compatibility",
