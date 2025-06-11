@@ -907,16 +907,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Item name is required" });
       }
 
-      // Allow duplicate uploads - generate unique names if needed
+      // Check for duplicate names to prevent duplicate uploads
       const existingItems = await storage.getClothingItems(DEMO_USER_ID);
-      let uniqueName = name;
-      let counter = 1;
+      const duplicateName = existingItems.find(item => 
+        item.name.toLowerCase().trim() === name.toLowerCase().trim()
+      );
       
-      while (existingItems.find(item => 
-        item.name.toLowerCase().trim() === uniqueName.toLowerCase().trim()
-      )) {
-        uniqueName = `${name} (${counter})`;
-        counter++;
+      if (duplicateName) {
+        // Delete the uploaded file since we're rejecting it
+        fs.unlinkSync(req.file.path);
+        return res.status(409).json({ 
+          error: "An item with this name already exists in your wardrobe",
+          existingItem: duplicateName
+        });
       }
 
       // Try to analyze image with AI, fallback if quota exceeded
@@ -945,7 +948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create clothing item with normalized data
       const itemData = {
         userId: DEMO_USER_ID,
-        name: uniqueName,
+        name,
         category: analysis.category || "other",
         style: analysis.style || "casual",
         colors: analysis.colors || ["unknown"],
