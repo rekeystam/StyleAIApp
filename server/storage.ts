@@ -12,21 +12,21 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserProfile(id: number, profile: UpdateUserProfile): Promise<User | undefined>;
-  
+
   getClothingItems(userId: number): Promise<ClothingItem[]>;
   getClothingItem(id: number): Promise<ClothingItem | undefined>;
   createClothingItem(item: InsertClothingItem): Promise<ClothingItem>;
   updateClothingItem(id: number, updates: Partial<ClothingItem>): Promise<ClothingItem | undefined>;
   deleteClothingItem(id: number): Promise<boolean>;
-  
+
   getOutfits(userId: number): Promise<Outfit[]>;
   createOutfit(outfit: InsertOutfit): Promise<Outfit>;
   updateOutfit(id: number, updates: Partial<Outfit>): Promise<Outfit | undefined>;
   deleteOutfit(id: number): Promise<boolean>;
-  
+
   getWeatherData(location: string): Promise<WeatherData | undefined>;
   createWeatherData(weather: InsertWeatherData): Promise<WeatherData>;
-  
+
   getShoppingRecommendations(userId: number): Promise<ShoppingRecommendation[]>;
   createShoppingRecommendation(recommendation: InsertShoppingRecommendation): Promise<ShoppingRecommendation>;
   deleteShoppingRecommendation(id: number): Promise<boolean>;
@@ -55,10 +55,10 @@ export class MemStorage implements IStorage {
     this.currentOutfitId = 1;
     this.currentWeatherDataId = 1;
     this.currentShoppingRecommendationId = 1;
-    
+
     this.initializeSampleData();
   }
-  
+
   private initializeSampleData() {
     // Create sample user with personalization data
     const sampleUser: User = {
@@ -78,7 +78,7 @@ export class MemStorage implements IStorage {
       })
     };
     this.users.set(1, sampleUser);
-    
+
     // Add comprehensive sample clothing items with weather data
     const sampleItems: ClothingItem[] = [
       {
@@ -255,7 +255,7 @@ export class MemStorage implements IStorage {
       this.clothingItems.set(item.id, item);
       this.currentClothingItemId = Math.max(this.currentClothingItemId, item.id + 1);
     });
-    
+
     // Add sample weather data
     const sampleWeather: WeatherData = {
       id: 1,
@@ -302,7 +302,7 @@ export class MemStorage implements IStorage {
   async updateUserProfile(id: number, profile: UpdateUserProfile): Promise<User | undefined> {
     const user = this.users.get(id);
     if (!user) return undefined;
-    
+
     const updatedUser = { ...user, ...profile };
     this.users.set(id, updatedUser);
     return updatedUser;
@@ -334,7 +334,7 @@ export class MemStorage implements IStorage {
   async updateClothingItem(id: number, updates: Partial<ClothingItem>): Promise<ClothingItem | undefined> {
     const item = this.clothingItems.get(id);
     if (!item) return undefined;
-    
+
     const updatedItem = { ...item, ...updates };
     this.clothingItems.set(id, updatedItem);
     return updatedItem;
@@ -368,7 +368,7 @@ export class MemStorage implements IStorage {
   async updateOutfit(id: number, updates: Partial<Outfit>): Promise<Outfit | undefined> {
     const outfit = this.outfits.get(id);
     if (!outfit) return undefined;
-    
+
     const updatedOutfit = { ...outfit, ...updates };
     this.outfits.set(id, updatedOutfit);
     return updatedOutfit;

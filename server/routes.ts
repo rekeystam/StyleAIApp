@@ -1232,6 +1232,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete all clothing items for user
+  app.delete("/api/clothing-items", async (req, res) => {
+    try {
+      const items = await storage.getClothingItems(DEMO_USER_ID);
+      
+      // Delete all image files
+      for (const item of items) {
+        const imagePath = path.join(process.cwd(), item.imageUrl);
+        if (fs.existsSync(imagePath)) {
+          try {
+            fs.unlinkSync(imagePath);
+          } catch (error) {
+            console.log(`Could not delete image file: ${imagePath}`);
+          }
+        }
+      }
+
+      // Delete all items from database
+      const deletedCount = await storage.deleteAllClothingItems(DEMO_USER_ID);
+      
+      res.json({ 
+        success: true, 
+        deletedCount,
+        message: `Deleted ${deletedCount} clothing items` 
+      });
+    } catch (error) {
+      console.error("Failed to delete all clothing items:", error);
+      res.status(500).json({ error: "Failed to delete all clothing items" });
+    }
+  });
+
   // Get weather-based outfit suggestions with automatic location detection
   app.get("/api/outfits/suggestions", async (req, res) => {
     try {
