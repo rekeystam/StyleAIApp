@@ -50,7 +50,6 @@ function calculateImageHash(imagePath: string): string {
 async function checkForDuplicateImage(imagePath: string, userId: number): Promise<ClothingItem | null> {
   const newImageHash = calculateImageHash(imagePath);
   const existingItems = await storage.getClothingItems(userId);
-  const newImageStats = fs.statSync(imagePath);
   
   for (const item of existingItems) {
     try {
@@ -63,33 +62,16 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
           return item;
         }
         
-        // Enhanced similarity detection
+        // Additional check: compare file sizes (potential for near-duplicate detection)
+        const newImageStats = fs.statSync(imagePath);
         const existingImageStats = fs.statSync(existingImagePath);
         const sizeDifference = Math.abs(newImageStats.size - existingImageStats.size);
-        const sizeRatio = sizeDifference / Math.max(newImageStats.size, existingImageStats.size);
         
-        // Check for near-duplicates with multiple criteria
-        const isSimilarSize = sizeRatio < 0.05; // Less than 5% size difference
-        const hasCopyPattern = item.name.toLowerCase().includes('copy') || 
-                              item.name.toLowerCase().includes(' - copy') ||
-                              path.basename(imagePath).toLowerCase().includes('copy');
-        
-        // Check for similar base names (removing copy suffixes and file extensions)
-        const cleanExistingName = item.name.replace(/\s*-?\s*copy\s*\d*$/i, '').trim();
-        const cleanNewName = path.basename(imagePath, path.extname(imagePath))
-                               .replace(/\s*-?\s*copy\s*\d*$/i, '').trim();
-        const isSimilarName = cleanExistingName.toLowerCase() === cleanNewName.toLowerCase();
-        
-        // If files are very similar in size AND have copy patterns OR similar names
-        if (isSimilarSize && (hasCopyPattern || isSimilarName)) {
-          console.log(`Potential duplicate detected: ${item.name} vs ${path.basename(imagePath)}`);
-          console.log(`Size difference: ${sizeDifference} bytes (${(sizeRatio * 100).toFixed(2)}%)`);
-          return item;
-        }
-        
-        // Check for identical file sizes (exact matches are highly suspicious)
-        if (newImageStats.size === existingImageStats.size && newImageStats.size > 0) {
-          console.log(`Identical file size detected: ${item.name} vs ${path.basename(imagePath)}`);
+        // If files are very similar in size and have similar names, likely duplicates
+        if (sizeDifference < 1024 && // Less than 1KB difference
+            item.name.toLowerCase().includes('copy') && 
+            path.basename(imagePath).toLowerCase().includes('copy')) {
+          console.log(`Potential duplicate detected: similar size and copy naming pattern`);
           return item;
         }
       }
@@ -1138,33 +1120,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (duplicateImage) {
         // Delete the uploaded file since we're rejecting it
         fs.unlinkSync(req.file.path);
-        
-        // Determine the type of duplicate detected
-        const newImageStats = fs.statSync(req.file.path);
-        const existingImagePath = path.join(process.cwd(), duplicateImage.imageUrl);
-        let duplicateReason = "This image appears to be a duplicate";
-        
-        if (fs.existsSync(existingImagePath)) {
-          const existingImageStats = fs.statSync(existingImagePath);
-          const newHash = calculateImageHash(req.file.path);
-          const existingHash = calculateImageHash(existingImagePath);
-          
-          if (newHash === existingHash) {
-            duplicateReason = "This is an exact duplicate image";
-          } else if (newImageStats.size === existingImageStats.size) {
-            duplicateReason = "This image has identical file size to an existing item";
-          } else {
-            const sizeDiff = Math.abs(newImageStats.size - existingImageStats.size);
-            const sizeRatio = sizeDiff / Math.max(newImageStats.size, existingImageStats.size);
-            duplicateReason = `This image is very similar (${(sizeRatio * 100).toFixed(1)}% size difference) to an existing item`;
-          }
-        }
-        
         return res.status(409).json({ 
-          error: "Duplicate image detected",
+          error: "This image has already been uploaded to your wardrobe",
           existingItem: duplicateImage,
           duplicateType: "image",
-          message: `${duplicateReason}. Found existing item: "${duplicateImage.name}". Please use a different image or check if this item is already in your wardrobe.`
+          message: `This image is identical to "${duplicateImage.name}" already in your wardrobe. Even with a different filename, we detected it's the same image.`
         });
       }
 
@@ -1525,61 +1485,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to analyze shopping needs:", error);
       res.status(500).json({ error: "Failed to analyze shopping needs" });
-    }
-  });
-
-  // Find potential duplicate items
-  app.get("/api/clothing-items/duplicates", async (req, res) => {
-    try {
-      const items = await storage.getClothingItems(DEMO_USER_ID);
-      const potentialDuplicates = [];
-      
-      for (let i = 0; i < items.length; i++) {
-        for (let j = i + 1; j < items.length; j++) {
-          const item1 = items[i];
-          const item2 = items[j];
-          
-          // Check for similar names
-          const name1 = item1.name.toLowerCase().replace(/\s*-?\s*copy\s*\d*$/i, '').trim();
-          const name2 = item2.name.toLowerCase().replace(/\s*-?\s*copy\s*\d*$/i, '').trim();
-          
-          // Check for copy patterns
-          const hasCopyPattern = item1.name.toLowerCase().includes('copy') || 
-                               item2.name.toLowerCase().includes('copy');
-          
-          // Check image file sizes if paths exist
-          let similarSize = false;
-          try {
-            const path1 = path.join(process.cwd(), item1.imageUrl);
-            const path2 = path.join(process.cwd(), item2.imageUrl);
-            
-            if (fs.existsSync(path1) && fs.existsSync(path2)) {
-              const stats1 = fs.statSync(path1);
-              const stats2 = fs.statSync(path2);
-              const sizeDiff = Math.abs(stats1.size - stats2.size);
-              const sizeRatio = sizeDiff / Math.max(stats1.size, stats2.size);
-              similarSize = sizeRatio < 0.1; // Less than 10% difference
-            }
-          } catch (error) {
-            // Continue if file check fails
-          }
-          
-          if ((name1 === name2) || (hasCopyPattern && similarSize) || 
-              (item1.category === item2.category && item1.style === item2.style && 
-               JSON.stringify(item1.colors) === JSON.stringify(item2.colors) && similarSize)) {
-            potentialDuplicates.push({
-              items: [item1, item2],
-              reason: name1 === name2 ? 'identical_name' : 
-                     hasCopyPattern ? 'copy_pattern' : 'similar_properties'
-            });
-          }
-        }
-      }
-      
-      res.json(potentialDuplicates);
-    } catch (error) {
-      console.error("Failed to find duplicates:", error);
-      res.status(500).json({ error: "Failed to find duplicates" });
     }
   });
 
