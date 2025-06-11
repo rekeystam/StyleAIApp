@@ -15,6 +15,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -38,6 +39,35 @@ const upload = multer({
 
 // Initialize Google Gemini AI - will be initialized when needed
 let genAI: GoogleGenerativeAI;
+
+// Helper function to calculate image hash for duplicate detection
+function calculateImageHash(imagePath: string): string {
+  const imageBuffer = fs.readFileSync(imagePath);
+  return crypto.createHash('md5').update(imageBuffer).digest('hex');
+}
+
+// Helper function to check for duplicate images
+async function checkForDuplicateImage(imagePath: string, userId: number): Promise<ClothingItem | null> {
+  const newImageHash = calculateImageHash(imagePath);
+  const existingItems = await storage.getClothingItems(userId);
+  
+  for (const item of existingItems) {
+    try {
+      const existingImagePath = path.join(process.cwd(), item.imageUrl);
+      if (fs.existsSync(existingImagePath)) {
+        const existingImageHash = calculateImageHash(existingImagePath);
+        if (newImageHash === existingImageHash) {
+          return item;
+        }
+      }
+    } catch (error) {
+      console.log(`Could not check hash for item ${item.id}: ${error}`);
+      // Continue checking other items if one fails
+    }
+  }
+  
+  return null;
+}
 
 // Weather API helper functions
 async function fetchWeatherData(location: string): Promise<WeatherData | null> {
@@ -918,7 +948,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fs.unlinkSync(req.file.path);
         return res.status(409).json({ 
           error: "An item with this name already exists in your wardrobe",
-          existingItem: duplicateName
+          existingItem: duplicateName,
+          duplicateType: "name"
+        });
+      }
+
+      // Check for duplicate images using image hash comparison
+      const duplicateImage = await checkForDuplicateImage(req.file.path, DEMO_USER_ID);
+      
+      if (duplicateImage) {
+        // Delete the uploaded file since we're rejecting it
+        fs.unlinkSync(req.file.path);
+        return res.status(409).json({ 
+          error: "This image has already been uploaded to your wardrobe",
+          existingItem: duplicateImage,
+          duplicateType: "image",
+          message: `This image is identical to "${duplicateImage.name}" already in your wardrobe. Even with a different filename, we detected it's the same image.`
         });
       }
 

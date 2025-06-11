@@ -41,11 +41,27 @@ export function UploadZone() {
     onError: (error: any) => {
       // Handle duplicate item error specifically
       if (error.status === 409) {
-        toast({
-          title: "Duplicate item detected",
-          description: "An item with this name already exists in your wardrobe. Try a different name.",
-          variant: "destructive",
-        });
+        const errorData = error.data || {};
+        
+        if (errorData.duplicateType === "image") {
+          toast({
+            title: "Duplicate image detected",
+            description: errorData.message || "This image has already been uploaded to your wardrobe.",
+            variant: "destructive",
+          });
+        } else if (errorData.duplicateType === "name") {
+          toast({
+            title: "Duplicate name detected",
+            description: "An item with this name already exists in your wardrobe. Try a different name.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Duplicate item detected",
+            description: "This item already exists in your wardrobe.",
+            variant: "destructive",
+          });
+        }
       } else {
         toast({
           title: "Upload failed",
