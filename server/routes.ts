@@ -115,33 +115,39 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
     const imageData = fs.readFileSync(imagePath);
     const base64Image = imageData.toString('base64');
     
-    const prompt = `Analyze this clothing item image carefully and provide a detailed analysis in the following JSON format. Pay special attention to formality levels - blazers, suits, dress shirts, dress shoes, ties should be classified as formal/business, NOT casual:
+    const prompt = `Analyze this clothing item image and identify the SINGLE MOST PROMINENT item. If multiple items are visible, focus on the main/central piece. Provide analysis in this exact JSON format:
 
 {
-  "category": "tops|bottoms|dresses|outerwear|accessories|shoes",
-  "style": "casual|formal|business|sporty|bohemian|vintage|modern",
-  "colors": ["primary_color", "secondary_color"],
-  "fabric_type": "cotton|denim|silk|wool|polyester|leather|other",
-  "pattern": "solid|striped|floral|geometric|abstract|none",
-  "formality": "very_casual|casual|smart_casual|business_casual|formal|very_formal",
-  "suitable_occasions": ["casual", "business", "formal", "smart_casual"],
-  "versatility_notes": "explain how this item can be styled for different occasions",
-  "season": "spring|summer|fall|winter|all_season",
-  "fit": "loose|regular|slim|tight",
-  "description": "brief description of the item",
-  "styling_tips": "how to style this item for different occasions",
-  "body_type_recommendations": "which body types this works well for"
+  "category": "tops",
+  "style": "formal",
+  "colors": ["beige", "tan"],
+  "fabric_type": "wool",
+  "pattern": "solid",
+  "formality": "formal",
+  "suitable_occasions": ["business", "formal"],
+  "versatility_notes": "Can be styled for business meetings or formal events",
+  "season": "all_season",
+  "fit": "regular",
+  "description": "Business blazer in neutral tone",
+  "styling_tips": "Pair with dress pants and shirt for professional look",
+  "body_type_recommendations": "Flattering for most body types"
 }
 
-Classification guidelines:
-- Suits, blazers, sport coats = "formal" or "business" style, "formal" or "business_casual" formality
-- Dress shirts, button-down shirts = "business" style, "business_casual" formality  
-- Ties, cufflinks, dress watches = "formal" style, "formal" formality
-- Dress shoes (oxfords, loafers, brogues) = "formal" style, "formal" formality
-- T-shirts, hoodies, sneakers = "casual" style, "casual" formality
-- Jeans, sweatpants = "casual" style, "casual" formality
+CRITICAL RULES:
+- category: MUST be ONE of: tops, bottoms, dresses, outerwear, accessories, shoes
+- style: MUST be ONE of: casual, formal, business, sporty, bohemian, vintage, modern
+- formality: MUST be ONE of: very_casual, casual, smart_casual, business_casual, formal, very_formal
+- season: MUST be ONE of: spring, summer, fall, winter, all_season
+- fit: MUST be ONE of: loose, regular, slim, tight
+- fabric_type: MUST be ONE of: cotton, denim, silk, wool, polyester, leather, other
 
-Only return valid JSON, no additional text.`;
+FORMALITY CLASSIFICATION:
+- Blazers, suits, sport coats = style: "formal", formality: "formal"
+- Dress shirts = style: "business", formality: "business_casual"  
+- Ties, dress shoes = style: "formal", formality: "formal"
+- T-shirts, hoodies = style: "casual", formality: "casual"
+
+Return ONLY the JSON object, no other text.`;
 
     const result = await model.generateContent([
       prompt,
@@ -167,7 +173,26 @@ Only return valid JSON, no additional text.`;
       }
       
       console.log("Cleaned AI response:", cleanText);
-      return JSON.parse(cleanText);
+      const parsed = JSON.parse(cleanText);
+      
+      // Normalize arrays to single values (take first element)
+      const normalized = {
+        category: Array.isArray(parsed.category) ? parsed.category[0] : parsed.category,
+        style: Array.isArray(parsed.style) ? parsed.style[0] : parsed.style,
+        colors: Array.isArray(parsed.colors) ? (Array.isArray(parsed.colors[0]) ? parsed.colors[0] : parsed.colors) : [parsed.colors],
+        fabric_type: Array.isArray(parsed.fabric_type) ? parsed.fabric_type[0] : parsed.fabric_type,
+        pattern: Array.isArray(parsed.pattern) ? parsed.pattern[0] : parsed.pattern,
+        formality: Array.isArray(parsed.formality) ? parsed.formality[0] : parsed.formality,
+        suitable_occasions: Array.isArray(parsed.suitable_occasions) ? parsed.suitable_occasions : [parsed.suitable_occasions],
+        versatility_notes: parsed.versatility_notes,
+        season: Array.isArray(parsed.season) ? parsed.season[0] : parsed.season,
+        fit: Array.isArray(parsed.fit) ? parsed.fit[0] : parsed.fit,
+        description: parsed.description,
+        styling_tips: parsed.styling_tips,
+        body_type_recommendations: parsed.body_type_recommendations
+      };
+      
+      return normalized;
     } catch (parseError) {
       console.error("Failed to parse AI response:", text);
       console.error("Parse error:", parseError);
@@ -917,7 +942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }
       
-      // Create clothing item
+      // Create clothing item with normalized data
       const itemData = {
         userId: DEMO_USER_ID,
         name: uniqueName,
@@ -928,6 +953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         aiAnalysis: JSON.stringify(analysis),
       };
 
+      console.log("Item data before validation:", itemData);
       const validatedData = insertClothingItemSchema.parse(itemData);
       const item = await storage.createClothingItem(validatedData);
 
