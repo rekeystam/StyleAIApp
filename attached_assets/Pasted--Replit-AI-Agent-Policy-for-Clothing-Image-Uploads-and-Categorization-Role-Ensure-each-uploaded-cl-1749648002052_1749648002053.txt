@@ -1,0 +1,71 @@
+ Replit AI Agent Policy for Clothing Image Uploads and Categorization
+Role: Ensure each uploaded clothing item is unique, high-quality, and properly classified.
+"""
+
+def handle_image_upload(image_file, user_id, wardrobe_db):
+    """
+    This function is triggered every time a user uploads an image of a clothing item.
+
+    🔒 Duplicate Protection:
+    - Reject image if filename or content already exists.
+    
+    🧠 AI-Based Categorization:
+    - Auto-detect item type (e.g., sporty, casual, business, accessory).
+    - Auto-detect dominant color.
+    
+    🚫 Rejection:
+    - If not clothing or unreadable, delete image.
+    """
+
+    # Step 1: Generate a unique hash of the image
+    import hashlib
+    file_hash = hashlib.md5(image_file.read()).hexdigest()
+    image_file.seek(0)  # Reset file pointer
+
+    # Step 2: Check for duplicates by hash or filename
+    if wardrobe_db.check_duplicate(file_hash, image_file.filename, user_id):
+        return {
+            "status": "rejected",
+            "message": "This item already exists in your wardrobe and will not be uploaded again."
+        }
+
+    # Step 3: Run AI analysis (external API placeholder)
+    item_data = analyze_image_with_ai(image_file)
+
+    if not item_data or item_data["category"] == "unknown":
+        return {
+            "status": "rejected",
+            "message": "This image was not recognized as a valid clothing item and has been removed."
+        }
+
+    # Step 4: Save to wardrobe
+    wardrobe_db.save_item({
+        "user_id": user_id,
+        "filename": image_file.filename,
+        "hash": file_hash,
+        "category": item_data["category"],
+        "color": item_data["color"],
+        "timestamp": current_time(),
+    })
+
+    return {
+        "status": "accepted",
+        "message": f"✅ {item_data['category'].title()} item saved with color: {item_data['color']}.",
+        "data": item_data
+    }
+
+# 🧠 Placeholder for AI Image Analysis Logic
+def analyze_image_with_ai(image_file):
+    """
+    Simulate external AI analysis for category and color detection.
+    In production, replace with real API call (e.g., Imagga).
+    """
+    # Example return value from a real API
+    return {
+        "category": "sporty",  # or casual, business, accessory, swimwear, etc.
+        "color": "blue"
+    }
+
+def current_time():
+    from datetime import datetime
+    return datetime.utcnow().isoformat()
