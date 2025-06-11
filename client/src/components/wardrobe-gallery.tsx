@@ -43,7 +43,7 @@ export function WardrobeGallery() {
     .map(item => item.category)
     .filter(cat => cat && typeof cat === 'string' && cat.trim() !== '');
 
-  const categories = ['all', ...new Set(validCategories)];
+  const categories = ['all', ...Array.from(new Set(validCategories))];
   const filteredItems = filterCategory === 'all' ? items : items.filter(item => item.category === filterCategory);
 
   const getCategoryColor = (category: string) => {

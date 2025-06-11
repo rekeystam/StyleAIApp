@@ -1138,9 +1138,64 @@ function generateBasicOutfitCombinations(userItems: any[], previousSuggestions: 
   return basicOutfits.slice(0, 3);
 }
 
+// Auto-process untagged items on startup
+async function processUntaggedItemsOnStartup() {
+  try {
+    console.log("Checking for untagged items on startup...");
+    const allItems = await storage.getClothingItems(1);
+    const untaggedItems = allItems.filter(item => 
+      !item.isVerified || 
+      !item.aiAnalysis || 
+      item.category === 'unprocessed' ||
+      item.style === 'pending' ||
+      !item.colors?.length
+    );
+
+    if (untaggedItems.length > 0) {
+      console.log(`Found ${untaggedItems.length} untagged items, processing...`);
+      
+      for (const item of untaggedItems) {
+        try {
+          if (item.imageUrl && fs.existsSync(path.join(process.cwd(), item.imageUrl.replace('/', '')))) {
+            const imagePath = path.join(process.cwd(), item.imageUrl.replace('/', ''));
+            const analysis = await analyzeClothingImage(imagePath);
+            
+            if (analysis) {
+              await storage.updateClothingItem(item.id, {
+                category: analysis.category || "other",
+                subcategory: analysis.subcategory || null,
+                style: analysis.style || "casual",
+                colors: analysis.colors || [],
+                dominantColor: analysis.dominant_color || null,
+                accentColors: analysis.accent_colors || null,
+                fabricType: analysis.fabric_type || null,
+                genderStyle: analysis.gender_style || null,
+                timeOfDay: analysis.time_of_day || null,
+                occasionSuitability: analysis.suitable_occasions || null,
+                aiAnalysis: JSON.stringify(analysis),
+                isVerified: true
+              });
+              console.log(`Processed untagged item: ${item.name}`);
+            }
+          }
+        } catch (error) {
+          console.log(`Failed to process item ${item.id} on startup:`, error.message);
+        }
+      }
+    } else {
+      console.log("No untagged items found on startup");
+    }
+  } catch (error) {
+    console.log("Startup processing failed:", error.message);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mock user ID for demo purposes (in real app, would use authentication)
   const DEMO_USER_ID = 1;
+
+  // Process untagged items on startup
+  setTimeout(processUntaggedItemsOnStartup, 5000); // Delay to ensure server is ready
 
   // Get all clothing items for user
   app.get("/api/clothing-items", async (req, res) => {
@@ -1309,37 +1364,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Analyzing image with Gemini AI...");
         analysis = await analyzeClothingImage(req.file.path);
       } catch (error: any) {
-        console.log("AI analysis failed, using fallback analysis:", error.message);
-        // Provide basic fallback analysis when AI is unavailable
-        analysis = {
-          category: "other",
-          style: "casual", 
-          colors: ["unknown"],
-          fabric_type: "unknown",
-          pattern: "unknown",
-          formality: "casual",
-          season: "all_season",
-          fit: "regular",
-          description: `Clothing item: ${name}`,
-          styling_tips: "Style according to occasion and personal preference",
-          body_type_recommendations: "Suitable for various body types"
-        };
+        console.log("AI analysis failed, marking item for reprocessing:", error.message);
+        // Mark item as unprocessed when AI analysis fails
+        analysis = null;
       }
       
-      // Create clothing item with normalized data
+      // Create clothing item with proper handling of failed analysis
       const itemData = {
         userId: DEMO_USER_ID,
         name,
-        category: analysis.category || "other",
-        style: analysis.style || "casual",
-        colors: analysis.colors || ["unknown"],
+        category: analysis?.category || "unprocessed",
+        subcategory: analysis?.subcategory || null,
+        style: analysis?.style || "pending",
+        colors: analysis?.colors || [],
+        dominantColor: analysis?.dominant_color || null,
+        accentColors: analysis?.accent_colors || null,
         imageUrl: `/uploads/${req.file.filename}`,
-        aiAnalysis: JSON.stringify(analysis),
+        aiAnalysis: analysis ? JSON.stringify(analysis) : null,
+        isVerified: !!analysis,
+        warmthLevel: null,
+        weatherSuitability: null,
+        fabricType: analysis?.fabric_type || null,
+        genderStyle: analysis?.gender_style || null,
+        timeOfDay: analysis?.time_of_day || null,
+        occasionSuitability: analysis?.suitable_occasions || null
       };
 
       console.log("Item data before validation:", itemData);
       const validatedData = insertClothingItemSchema.parse(itemData);
       const item = await storage.createClothingItem(validatedData);
+
+      // If AI analysis failed, automatically trigger reprocessing
+      if (!analysis) {
+        console.log(`Item ${item.id} marked for reprocessing - will retry AI analysis`);
+        // Schedule immediate retry in the background
+        setImmediate(async () => {
+          try {
+            console.log(`Retrying AI analysis for item ${item.id}...`);
+            const retryAnalysis = await analyzeClothingImage(req.file!.path);
+            if (retryAnalysis) {
+              await storage.updateClothingItem(item.id, {
+                category: retryAnalysis.category || "other",
+                subcategory: retryAnalysis.subcategory || null,
+                style: retryAnalysis.style || "casual",
+                colors: retryAnalysis.colors || [],
+                dominantColor: retryAnalysis.dominant_color || null,
+                accentColors: retryAnalysis.accent_colors || null,
+                fabricType: retryAnalysis.fabric_type || null,
+                genderStyle: retryAnalysis.gender_style || null,
+                timeOfDay: retryAnalysis.time_of_day || null,
+                occasionSuitability: retryAnalysis.suitable_occasions || null,
+                aiAnalysis: JSON.stringify(retryAnalysis),
+                isVerified: true
+              });
+              console.log(`Successfully reprocessed item ${item.id}`);
+            }
+          } catch (retryError: any) {
+            console.log(`Retry failed for item ${item.id}:`, retryError.message);
+          }
+        });
+      }
 
       res.json(item);
     } catch (error) {
