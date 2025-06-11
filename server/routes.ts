@@ -1153,6 +1153,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI analysis endpoint for untagged items
+  app.post("/api/clothing-items/analyze-untagged", async (req, res) => {
+    try {
+      // Get all untagged/unverified items for the user
+      const allItems = await storage.getClothingItems(DEMO_USER_ID);
+      const untaggedItems = allItems.filter(item => 
+        !item.isVerified || 
+        !item.aiAnalysis || 
+        !item.colors?.length || 
+        !item.style ||
+        !item.subcategory
+      );
+
+      if (untaggedItems.length === 0) {
+        return res.json({ 
+          message: "All items are already analyzed and tagged",
+          processedCount: 0 
+        });
+      }
+
+      let processedCount = 0;
+      const results = [];
+
+      for (const item of untaggedItems) {
+        try {
+          // Only analyze if image exists
+          if (item.imageUrl && fs.existsSync(path.join(process.cwd(), item.imageUrl.replace('/', '')))) {
+            const imagePath = path.join(process.cwd(), item.imageUrl.replace('/', ''));
+            const analysis = await analyzeClothingImage(imagePath);
+            
+            if (analysis) {
+              // Update item with AI analysis results
+              const updatedItem = await storage.updateClothingItem(item.id, {
+                subcategory: analysis.subcategory || null,
+                style: analysis.style || "casual",
+                colors: analysis.colors || [],
+                dominantColor: analysis.dominant_color || null,
+                accentColors: analysis.accent_colors || null,
+                fabricType: analysis.fabric_type || null,
+                genderStyle: analysis.gender_style || null,
+                timeOfDay: analysis.time_of_day || null,
+                occasionSuitability: analysis.suitable_occasions || null,
+                weatherSuitability: analysis.weather_suitability || null,
+                warmthLevel: analysis.formality === "formal" ? 2 : 
+                           analysis.formality === "business" ? 3 : 
+                           analysis.formality === "casual" ? 1 : 2,
+                aiAnalysis: JSON.stringify(analysis),
+                isVerified: true
+              });
+
+              if (updatedItem) {
+                processedCount++;
+                results.push({
+                  id: item.id,
+                  name: item.name,
+                  category: analysis.category || item.category,
+                  subcategory: analysis.subcategory,
+                  style: analysis.style,
+                  colors: analysis.colors,
+                  useCase: analysis.formality,
+                  stylingTips: analysis.styling_tips
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to analyze item ${item.id}:`, error);
+        }
+      }
+
+      res.json({
+        message: `Successfully analyzed and tagged ${processedCount} items`,
+        processedCount,
+        results
+      });
+
+    } catch (error) {
+      console.error("Failed to analyze untagged items:", error);
+      res.status(500).json({ error: "Failed to analyze untagged items" });
+    }
+  });
+
   // Upload and analyze clothing item
   app.post("/api/clothing-items", upload.single('image'), async (req, res) => {
     try {

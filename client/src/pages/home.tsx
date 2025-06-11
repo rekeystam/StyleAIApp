@@ -2,6 +2,7 @@ import { Navigation } from "@/components/navigation";
 import { UploadZone } from "@/components/upload-zone";
 import { WardrobeGallery } from "@/components/wardrobe-gallery";
 import { OutfitSuggestions } from "@/components/outfit-suggestions";
+import { AIAnalysisPanel } from "@/components/ai-analysis-panel";
 import { Button } from "@/components/ui/button";
 import { Eye, UserCheck, Sparkles, Plus } from "lucide-react";
 
@@ -62,6 +63,22 @@ export default function Home() {
       </section>
 
       <UploadZone />
+      
+      {/* AI Analysis Section */}
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 font-serif mb-4">
+              AI Analysis & Tagging
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Automatically analyze and categorize your clothing items using advanced AI technology.
+            </p>
+          </div>
+          <AIAnalysisPanel />
+        </div>
+      </section>
+      
       <WardrobeGallery />
       <OutfitSuggestions />
 
