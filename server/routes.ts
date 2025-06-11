@@ -42,14 +42,25 @@ let genAI: GoogleGenerativeAI;
 
 // Helper function to calculate image hash for duplicate detection
 function calculateImageHash(imagePath: string): string {
-  const imageBuffer = fs.readFileSync(imagePath);
-  return crypto.createHash('md5').update(imageBuffer).digest('hex');
+  try {
+    const imageBuffer = fs.readFileSync(imagePath);
+    // Use SHA256 for better reliability than MD5
+    const hash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+    console.log(`Calculated hash for ${path.basename(imagePath)}: ${hash.substring(0, 16)}...`);
+    return hash;
+  } catch (error) {
+    console.error(`Error calculating hash for ${imagePath}:`, error);
+    // Return a unique hash if calculation fails to prevent false positives
+    return crypto.createHash('sha256').update(imagePath + Date.now()).digest('hex');
+  }
 }
 
 // Helper function to check for duplicate images with enhanced similarity detection
 async function checkForDuplicateImage(imagePath: string, userId: number): Promise<ClothingItem | null> {
   const newImageHash = calculateImageHash(imagePath);
   const existingItems = await storage.getClothingItems(userId);
+  
+  console.log(`Checking for duplicates: new image hash ${newImageHash}`);
   
   for (const item of existingItems) {
     try {
@@ -59,7 +70,7 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
         
         // Exact hash match - most reliable
         if (newImageHash === existingImageHash) {
-          console.log(`Exact duplicate detected: ${newImageHash} matches existing item "${item.name}"`);
+          console.log(`EXACT DUPLICATE DETECTED: Hash ${newImageHash} matches existing item "${item.name}" (ID: ${item.id})`);
           return item;
         }
         
@@ -69,44 +80,65 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
         const sizeDifference = Math.abs(newImageStats.size - existingImageStats.size);
         const sizeRatio = Math.min(newImageStats.size, existingImageStats.size) / Math.max(newImageStats.size, existingImageStats.size);
         
-        // Very similar file sizes (within 2KB or 95% similarity)
-        const similarSize = sizeDifference < 2048 || sizeRatio > 0.95;
+        // More aggressive similarity detection - stricter thresholds
+        const similarSize = sizeDifference < 1024 || sizeRatio > 0.98; // Reduced from 2KB to 1KB, increased ratio from 95% to 98%
         
         if (similarSize) {
-          // Check for copy/duplicate naming patterns
           const newFileName = path.basename(imagePath).toLowerCase();
           const existingFileName = path.basename(existingImagePath).toLowerCase();
           const itemNameLower = item.name.toLowerCase();
           
-          const isCopyPattern = 
-            newFileName.includes('copy') || 
-            newFileName.includes('duplicate') || 
-            newFileName.includes('(1)') ||
-            newFileName.includes('(2)') ||
-            itemNameLower.includes('copy') ||
-            itemNameLower.includes('duplicate');
+          // More comprehensive copy pattern detection
+          const copyPatterns = [
+            'copy', 'duplicate', '(1)', '(2)', '(3)', '(4)', '(5)',
+            '_copy', '-copy', ' copy', '_duplicate', '-duplicate', ' duplicate',
+            '_1', '_2', '_3', '_4', '_5', '-1', '-2', '-3', '-4', '-5'
+          ];
           
-          // Check for very similar base names (without copy suffixes)
-          const baseNewName = newFileName.replace(/[-_\s]*(copy|duplicate|\(\d+\)).*$/i, '');
-          const baseExistingName = existingFileName.replace(/[-_\s]*(copy|duplicate|\(\d+\)).*$/i, '');
-          const baseItemName = itemNameLower.replace(/[-_\s]*(copy|duplicate|\(\d+\)).*$/i, '');
+          const isCopyPattern = copyPatterns.some(pattern => 
+            newFileName.includes(pattern) || 
+            existingFileName.includes(pattern) ||
+            itemNameLower.includes(pattern)
+          );
           
+          // Enhanced base name comparison
+          const cleanName = (name: string) => name
+            .replace(/[-_\s]*(copy|duplicate|\(\d+\)|\s-\scopy|\s-\sduplicate|_\d+|-\d+).*$/i, '')
+            .replace(/[^a-z0-9]/g, '');
+          
+          const baseNewName = cleanName(newFileName);
+          const baseExistingName = cleanName(existingFileName);
+          const baseItemName = cleanName(itemNameLower);
+          
+          // Check for similar base names or substring matches
           const similarNames = 
             baseNewName === baseExistingName || 
             baseNewName === baseItemName ||
-            (baseNewName.length > 5 && baseExistingName.includes(baseNewName)) ||
-            (baseExistingName.length > 5 && baseNewName.includes(baseExistingName));
+            (baseNewName.length > 4 && baseExistingName.includes(baseNewName)) ||
+            (baseExistingName.length > 4 && baseNewName.includes(baseExistingName)) ||
+            (baseNewName.length > 4 && baseItemName.includes(baseNewName)) ||
+            (baseItemName.length > 4 && baseNewName.includes(baseItemName));
           
-          if (isCopyPattern && similarNames) {
-            console.log(`Copy duplicate detected: similar size (${sizeDifference}B diff) and copy naming pattern`);
-            console.log(`New: ${newFileName}, Existing: ${existingFileName}, Item: ${itemNameLower}`);
+          // Stricter duplicate detection
+          if (isCopyPattern || (sizeDifference < 512 && similarNames)) {
+            console.log(`SIMILAR DUPLICATE DETECTED: Size diff ${sizeDifference}B, ratio ${sizeRatio.toFixed(3)}`);
+            console.log(`Copy pattern: ${isCopyPattern}, Similar names: ${similarNames}`);
+            console.log(`New: "${newFileName}" -> "${baseNewName}"`);
+            console.log(`Existing: "${existingFileName}" -> "${baseExistingName}"`);
+            console.log(`Item: "${itemNameLower}" -> "${baseItemName}"`);
             return item;
           }
           
-          // Even stricter check: if files are nearly identical in size and have very similar names
-          if (sizeDifference < 512 && similarNames) {
-            console.log(`Near-identical duplicate detected: ${sizeDifference}B difference with similar names`);
-            return item;
+          // Additional check: if file sizes are very close and any AI analysis matches
+          if (sizeDifference < 256) {
+            try {
+              const existingAnalysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
+              // If we have two images of very similar size, consider them potential duplicates
+              console.log(`VERY SIMILAR SIZE DETECTED: ${sizeDifference}B difference - potential duplicate of "${item.name}"`);
+              return item;
+            } catch (e) {
+              // Continue if analysis parsing fails
+            }
           }
         }
       }
@@ -1172,18 +1204,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check for duplicate images using enhanced image comparison
+      console.log(`Starting duplicate check for file: ${req.file.filename}, size: ${req.file.size}B`);
       const duplicateImage = await checkForDuplicateImage(req.file.path, DEMO_USER_ID);
       
       if (duplicateImage) {
         // Delete the uploaded file since we're rejecting it
         fs.unlinkSync(req.file.path);
+        console.log(`DUPLICATE REJECTED: "${name}" matches existing item "${duplicateImage.name}" (ID: ${duplicateImage.id})`);
         return res.status(409).json({ 
           error: "Duplicate image detected",
           existingItem: duplicateImage,
           duplicateType: "image",
-          message: `This appears to be the same image as "${duplicateImage.name}" already in your wardrobe. We detected it's either identical or a copy/renamed version of an existing image.`
+          message: `This item already exists in your wardrobe. The uploaded image is identical or very similar to "${duplicateImage.name}" that you already have saved.`
         });
       }
+      
+      console.log(`No duplicates found for "${name}" - proceeding with upload`);
 
       // Try to analyze image with AI, fallback if quota exceeded
       let analysis;
