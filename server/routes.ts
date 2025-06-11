@@ -145,79 +145,37 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
     const imageData = fs.readFileSync(imagePath);
     const base64Image = imageData.toString('base64');
     
-    const prompt = `Analyze this clothing item image with advanced object detection and semantic classification. Identify the SINGLE MOST PROMINENT item. Provide detailed analysis in this exact JSON format:
+    const prompt = `Analyze this clothing item image and identify the SINGLE MOST PROMINENT item. If multiple items are visible, focus on the main/central piece. Provide analysis in this exact JSON format:
 
 {
   "category": "tops",
-  "style": "sporty",
-  "subcategory": "tank_top",
-  "colors": ["olive_green", "black"],
-  "dominant_color": "olive_green",
-  "accent_colors": ["black"],
-  "fabric_type": "polyester_blend",
+  "style": "formal",
+  "colors": ["beige", "tan"],
+  "fabric_type": "wool",
   "pattern": "solid",
-  "formality": "very_casual",
-  "suitable_occasions": ["gym", "casual", "athleisure"],
-  "time_of_day": ["morning", "afternoon"],
-  "weather_suitability": ["warm", "mild"],
-  "gender_style": "unisex",
-  "brand_indicators": "adidas_style_athletic",
-  "versatility_notes": "Perfect for workouts and athleisure styling",
-  "season": "spring_summer",
+  "formality": "formal",
+  "suitable_occasions": ["business", "formal"],
+  "versatility_notes": "Can be styled for business meetings or formal events",
+  "season": "all_season",
   "fit": "regular",
-  "description": "Athletic tank top in olive green with black accents",
-  "styling_tips": "Pair with athletic shorts or joggers for gym, or with jeans for casual athleisure look",
-  "body_type_recommendations": "Flattering for athletic builds, good for layering"
+  "description": "Business blazer in neutral tone",
+  "styling_tips": "Pair with dress pants and shirt for professional look",
+  "body_type_recommendations": "Flattering for most body types"
 }
 
-ENHANCED CLASSIFICATION RULES:
+CRITICAL RULES:
+- category: MUST be ONE of: tops, bottoms, dresses, outerwear, accessories, shoes
+- style: MUST be ONE of: casual, formal, business, sporty, bohemian, vintage, modern
+- formality: MUST be ONE of: very_casual, casual, smart_casual, business_casual, formal, very_formal
+- season: MUST be ONE of: spring, summer, fall, winter, all_season
+- fit: MUST be ONE of: loose, regular, slim, tight
+- fabric_type: MUST be ONE of: cotton, denim, silk, wool, polyester, leather, other
 
-CATEGORY (MUST be ONE of):
-- tops, bottoms, dresses, outerwear, accessories, shoes, swimwear
-
-SUBCATEGORY (specific item type):
-- For accessories: belt, earrings, necklace, bracelet, watch, sunglasses, hat, scarf, gloves, socks
-- For shoes: sneakers, dress_shoes, boots, sandals, heels, flats, athletic_shoes
-- For tops: t_shirt, tank_top, blouse, shirt, sweater, hoodie, blazer
-- For bottoms: jeans, chinos, shorts, skirt, leggings, dress_pants
-- For swimwear: bikini, one_piece, swim_shorts, cover_up
-
-STYLE CLASSIFICATION (context-aware):
-- sporty: Athletic wear, gym clothes, Adidas/Nike items, tank tops, athletic shorts, sneakers
-- casual: T-shirts, jeans, hoodies, casual sneakers, everyday wear
-- business: Collared shirts, dress pants, blazers, professional attire
-- formal: Suits, evening wear, dress shoes, formal dresses
-- swimwear: Bikinis, swimsuits, cover-ups, beach wear
-- bohemian: Flowy fabrics, ethnic patterns, artistic styles
-- vintage: Retro styles, classic cuts
-- modern: Contemporary, minimalist designs
-
-ENHANCED COLOR DETECTION:
-Detect ALL visible colors, not "unknown". Use specific color names:
-- Primary colors: red, blue, yellow, green, orange, purple
-- Neutrals: black, white, grey, beige, tan, cream, ivory
-- Specific tones: navy, burgundy, olive, maroon, teal, coral, etc.
-- Always identify dominant_color and accent_colors separately
-
-FOOTWEAR CONTEXTUALIZATION:
-For shoes, specify time_of_day and occasion suitability:
-- time_of_day: morning, afternoon, evening, all_day
-- occasion_suitability: casual, business, formal, athletic, outdoor
-
-ACCESSORY PERSONALIZATION:
-For accessories, include gender_style and context:
-- gender_style: masculine, feminine, unisex
-- context_appropriate: work, casual, formal, sport, evening
-
-BUSINESS/FORMAL DETECTION:
-- Collared shirts, tailored pants → business
-- Fine materials (silk, wool), structured cuts → formal
-- Athletic materials, loose fits → sporty
-- Denim, cotton casual fits → casual
-
-SWIMWEAR CLASSIFICATION:
-- One-piece suits, bikinis → swimwear category
-- Beach cover-ups → swimwear or casual depending on style
+FORMALITY CLASSIFICATION:
+- Blazers, suits, sport coats = style: "formal", formality: "formal"
+- Dress shirts = style: "business", formality: "business_casual"  
+- Ties, dress shoes = style: "formal", formality: "formal"
+- T-shirts, hoodies = style: "casual", formality: "casual"
 
 Return ONLY the JSON object, no other text.`;
 
@@ -528,98 +486,37 @@ async function generateOutfitSuggestions(userId: number, occasion?: string, weat
       };
     });
 
-    // Enhanced color coordination logic with comprehensive color matching
+    // Color coordination logic
     const getColorHarmony = (colors: string[]): string[] => {
       const colorMap: { [key: string]: string[] } = {
-        // Neutrals - work with everything
-        'white': ['black', 'navy', 'grey', 'blue', 'red', 'green', 'brown', 'beige', 'burgundy'],
-        'black': ['white', 'grey', 'red', 'pink', 'yellow', 'silver', 'cream', 'ivory'],
-        'grey': ['white', 'black', 'navy', 'pink', 'yellow', 'blue', 'purple', 'burgundy'],
-        'beige': ['brown', 'navy', 'white', 'khaki', 'blue', 'cream', 'tan', 'olive'],
-        'cream': ['navy', 'brown', 'khaki', 'burgundy', 'olive', 'tan'],
-        'ivory': ['navy', 'brown', 'black', 'burgundy', 'forest_green'],
-        'tan': ['navy', 'white', 'brown', 'olive', 'burgundy'],
-        
-        // Blues
-        'navy': ['white', 'cream', 'light_blue', 'grey', 'khaki', 'beige', 'tan', 'burgundy'],
-        'blue': ['white', 'navy', 'grey', 'khaki', 'brown', 'cream', 'yellow'],
-        'light_blue': ['white', 'navy', 'grey', 'khaki', 'coral'],
-        'teal': ['white', 'coral', 'navy', 'grey', 'cream'],
-        
-        // Earth tones
-        'brown': ['cream', 'beige', 'white', 'navy', 'khaki', 'orange', 'tan'],
-        'khaki': ['white', 'navy', 'brown', 'blue', 'green', 'olive'],
-        'olive': ['white', 'khaki', 'brown', 'navy', 'cream', 'tan'],
-        
-        // Reds
+        'white': ['black', 'navy', 'grey', 'blue', 'red', 'green', 'brown'],
+        'black': ['white', 'grey', 'red', 'pink', 'yellow', 'silver'],
+        'navy': ['white', 'cream', 'light blue', 'grey', 'khaki', 'beige'],
+        'grey': ['white', 'black', 'navy', 'pink', 'yellow', 'blue'],
+        'brown': ['cream', 'beige', 'white', 'navy', 'khaki', 'orange'],
+        'blue': ['white', 'navy', 'grey', 'khaki', 'brown', 'cream'],
         'red': ['white', 'black', 'navy', 'grey', 'cream'],
-        'burgundy': ['white', 'grey', 'navy', 'cream', 'tan', 'olive'],
-        'maroon': ['white', 'grey', 'cream', 'tan'],
-        'coral': ['white', 'navy', 'teal', 'light_blue'],
-        'pink': ['white', 'grey', 'navy', 'black'],
-        
-        // Greens
         'green': ['white', 'khaki', 'brown', 'navy', 'cream'],
-        'forest_green': ['white', 'khaki', 'tan', 'ivory'],
-        'lime': ['white', 'navy', 'grey'],
-        
-        // Purples
-        'purple': ['white', 'grey', 'black', 'cream'],
-        'lavender': ['white', 'grey', 'navy'],
-        
-        // Yellows/Oranges
-        'yellow': ['white', 'grey', 'navy', 'blue'],
-        'orange': ['white', 'brown', 'navy', 'cream'],
-        'mustard': ['navy', 'white', 'brown']
+        'khaki': ['white', 'navy', 'brown', 'blue', 'green'],
+        'beige': ['brown', 'navy', 'white', 'khaki', 'blue']
       };
       
-      return colors.flatMap(color => {
-        const normalizedColor = color.toLowerCase().replace(/[^a-z]/g, '_');
-        return colorMap[normalizedColor] || ['white', 'black', 'grey', 'navy'];
-      });
+      return colors.flatMap(color => colorMap[color.toLowerCase()] || ['white', 'black', 'grey']);
     };
 
-    // Enhanced wardrobe analysis with gender, style, and accessory detection
+    // Detect wardrobe gender orientation for consistent styling
     const wardrobeAnalysis = userItems.map(item => {
       const text = `${item.name} ${item.category}`.toLowerCase();
-      const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
+      let genderStyle = 'unisex';
       
-      let genderStyle = analysis.gender_style || 'unisex';
-      let subcategory = analysis.subcategory || item.category;
-      let timeOfDay = analysis.time_of_day || ['all_day'];
-      let weatherSuitability = analysis.weather_suitability || ['mild'];
-      
-      // Enhanced gender detection
       if (text.includes('dress') || text.includes('skirt') || text.includes('blouse') || 
-          text.includes('heels') || text.includes('pumps') || item.category === 'dresses' ||
-          text.includes('earrings') || analysis.subcategory === 'earrings') {
+          text.includes('heels') || text.includes('pumps') || item.category === 'dresses') {
         genderStyle = 'feminine';
-      } else if (text.includes('suit') || text.includes('tie') || text.includes('men') ||
-                 text.includes('watch') || analysis.subcategory === 'watch') {
+      } else if (text.includes('suit') || text.includes('tie') || text.includes('men')) {
         genderStyle = 'masculine';
       }
       
-      // Detect athletic/sporty items
-      const isAthletic = text.includes('athletic') || text.includes('sport') || 
-                        text.includes('gym') || text.includes('adidas') || 
-                        text.includes('nike') || item.style === 'sporty' ||
-                        analysis.style === 'sporty';
-      
-      // Detect business/formal items
-      const isBusiness = text.includes('business') || text.includes('formal') ||
-                        text.includes('blazer') || text.includes('suit') ||
-                        item.style === 'business' || item.style === 'formal';
-      
-      return { 
-        ...item, 
-        genderStyle, 
-        subcategory,
-        timeOfDay,
-        weatherSuitability,
-        isAthletic,
-        isBusiness,
-        analysis
-      };
+      return { ...item, genderStyle };
     });
 
     // Build comprehensive context for AI styling
@@ -641,58 +538,43 @@ async function generateOutfitSuggestions(userId: number, occasion?: string, weat
       preferences: userProfile.preferences ? JSON.parse(userProfile.preferences) : null
     } : null;
 
-    // Enhanced occasion filtering with subcategory and style analysis
-    const occasionFilteredItems = wardrobeAnalysis.filter(item => {
-      const analysis = item.analysis || {};
+    // Filter items by occasion suitability first
+    const occasionFilteredItems = userItems.filter(item => {
+      const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
       const itemStyle = item.style?.toLowerCase() || 'casual';
       const itemCategory = item.category?.toLowerCase() || '';
       const itemName = item.name?.toLowerCase() || '';
-      const subcategory = analysis.subcategory || '';
-      const suitableOccasions = analysis.suitable_occasions || [];
       
       if (!occasion || occasion === 'casual') {
         // Casual: allow most items, exclude very formal pieces
-        return !itemName.includes('tuxedo') && analysis.style !== 'very_formal';
-      }
-      
-      if (occasion === 'sporty' || occasion === 'athletic') {
-        // Athletic: prioritize sporty items
-        return item.isAthletic || itemStyle === 'sporty' || 
-               suitableOccasions.includes('gym') || suitableOccasions.includes('athletic') ||
-               subcategory.includes('athletic') || subcategory === 'tank_top';
+        return !itemName.includes('suit') || !itemName.includes('tuxedo');
       }
       
       if (occasion === 'business' || occasion === 'business_casual') {
         // Business: prioritize professional items
-        const businessKeywords = ['business', 'formal', 'professional', 'blazer', 'suit', 'dress_shoes'];
-        const isBusinessSuitable = businessKeywords.some(keyword => 
-          itemStyle.includes(keyword) || subcategory.includes(keyword) || 
-          suitableOccasions.includes('business') || suitableOccasions.includes('work')
+        const businessItems = [
+          'business', 'formal', 'professional', 'smart', 'dress',
+          'blazer', 'suit', 'shirt', 'trousers', 'chinos', 'pumps', 'loafers'
+        ];
+        
+        const isBusinessSuitable = businessItems.some(keyword => 
+          itemStyle.includes(keyword) || itemCategory.includes(keyword) || itemName.includes(keyword)
         );
         
-        // Include versatile pieces that work in business contexts
-        const versatileForBusiness = 
-          (itemCategory === 'tops' && !subcategory.includes('t_shirt') && !item.isAthletic) ||
-          (itemCategory === 'bottoms' && (subcategory.includes('chinos') || subcategory.includes('dress_pants'))) ||
-          (itemCategory === 'shoes' && !subcategory.includes('sneakers') && !item.isAthletic) ||
-          (itemCategory === 'accessories' && (subcategory === 'belt' || subcategory === 'watch'));
+        // Also include versatile casual items that can be dressed up
+        const versatileCasual = itemCategory === 'tops' && !itemName.includes('t-shirt') ||
+                               itemCategory === 'bottoms' && (itemName.includes('chinos') || itemName.includes('trousers')) ||
+                               itemCategory === 'shoes' && !itemName.includes('sneakers');
         
-        return isBusinessSuitable || versatileForBusiness;
+        return isBusinessSuitable || versatileCasual;
       }
       
       if (occasion === 'formal') {
-        // Formal: strict formal requirements
-        const formalKeywords = ['formal', 'dress', 'suit', 'blazer', 'heels', 'dress_shoes'];
-        return formalKeywords.some(keyword => 
-          itemStyle.includes(keyword) || subcategory.includes(keyword) || 
-          suitableOccasions.includes('formal') || analysis.formality === 'formal'
+        // Formal: only dress up items
+        const formalItems = ['formal', 'dress', 'suit', 'blazer', 'pumps', 'heels', 'tie', 'elegant'];
+        return formalItems.some(keyword => 
+          itemStyle.includes(keyword) || itemCategory.includes(keyword) || itemName.includes(keyword)
         );
-      }
-      
-      if (occasion === 'date_night') {
-        // Date night: versatile, attractive pieces
-        return !item.isAthletic && analysis.style !== 'very_casual' &&
-               !subcategory.includes('gym') && !suitableOccasions.includes('gym');
       }
       
       return true; // Default: include all items
@@ -748,21 +630,11 @@ WEATHER-BASED STYLING:
 - For windy weather: Fitted clothes, avoid loose flowing items
 ` : '- Consider general seasonal appropriateness'}
 
-ENHANCED STYLING GUIDELINES:
-- Create 4-5 different outfit combinations using available items
-- Each outfit should include 3-6 items: core clothing + appropriate accessories
-- SMART ACCESSORY SELECTION based on user profile and occasion:
-  * For feminine profiles: Include earrings, necklaces, scarves when available
-  * For masculine profiles: Include watches, belts, ties when appropriate
-  * For unisex: Include sunglasses, hats, bags based on occasion
-- CONTEXTUAL FOOTWEAR MATCHING:
-  * Athletic shoes for sporty/casual occasions
-  * Dress shoes for business/formal occasions  
-  * Versatile shoes (loafers, clean sneakers) for smart-casual
+STYLING GUIDELINES:
+- Create 4 different outfit combinations using available items
+- Each outfit can include up to six items, such as socks, accessories, hats, watches, ties, and sunglasses, if they are shown in the attached image and depend on the occasion
 - Focus on practical, weather-appropriate combinations
 - STRICTLY MATCH THE REQUESTED OCCASION: "${occasion}"
-- COLOR COORDINATION: Ensure dominant colors complement each other
-- STYLE CONSISTENCY: Mix athletic with athletic, formal with formal, unless creating intentional contrast
 - If occasion is "business": prioritize professional items like blazers, dress shirts, dress pants, formal shoes
 - If occasion is "formal": focus on suits, dresses, formal shoes, elegant pieces
 - If occasion is "casual": emphasize comfortable, relaxed pieces like jeans, t-shirts, sneakers
@@ -1229,37 +1101,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to delete clothing item:", error);
       res.status(500).json({ error: "Failed to delete clothing item" });
-    }
-  });
-
-  // Delete all clothing items for user
-  app.delete("/api/clothing-items", async (req, res) => {
-    try {
-      const items = await storage.getClothingItems(DEMO_USER_ID);
-      
-      // Delete all image files
-      for (const item of items) {
-        const imagePath = path.join(process.cwd(), item.imageUrl);
-        if (fs.existsSync(imagePath)) {
-          try {
-            fs.unlinkSync(imagePath);
-          } catch (error) {
-            console.log(`Could not delete image file: ${imagePath}`);
-          }
-        }
-      }
-
-      // Delete all items from database
-      const deletedCount = await storage.deleteAllClothingItems(DEMO_USER_ID);
-      
-      res.json({ 
-        success: true, 
-        deletedCount,
-        message: `Deleted ${deletedCount} clothing items` 
-      });
-    } catch (error) {
-      console.error("Failed to delete all clothing items:", error);
-      res.status(500).json({ error: "Failed to delete all clothing items" });
     }
   });
 

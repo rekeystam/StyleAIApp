@@ -19,21 +19,15 @@ export const clothingItems = pgTable("clothing_items", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   name: text("name").notNull(),
-  category: text("category").notNull(), // tops, bottoms, dresses, accessories, shoes, swimwear
-  subcategory: text("subcategory"), // tank_top, blazer, sneakers, belt, earrings, etc.
-  style: text("style").notNull(), // casual, formal, business, sporty, etc.
+  category: text("category").notNull(), // tops, bottoms, dresses, accessories, etc.
+  style: text("style").notNull(), // casual, formal, business, etc.
   colors: text("colors").array().notNull(), // array of detected colors
-  dominantColor: text("dominant_color"), // primary color of the item
-  accentColors: text("accent_colors").array(), // secondary colors
   imageUrl: text("image_url").notNull(),
   aiAnalysis: text("ai_analysis"), // JSON string of AI analysis results
   isVerified: boolean("is_verified").default(false),
   warmthLevel: integer("warmth_level"), // 1-5 scale for weather appropriateness
   weatherSuitability: text("weather_suitability").array(), // rain, sun, snow, wind
   fabricType: text("fabric_type"), // cotton, wool, synthetic, etc.
-  genderStyle: text("gender_style"), // masculine, feminine, unisex
-  timeOfDay: text("time_of_day").array(), // morning, afternoon, evening, all_day
-  occasionSuitability: text("occasion_suitability").array(), // casual, business, formal, athletic
 });
 
 export const outfits = pgTable("outfits", {
