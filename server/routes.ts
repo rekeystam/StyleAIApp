@@ -40,6 +40,34 @@ const upload = multer({
 // Initialize Google Gemini AI - will be initialized when needed
 let genAI: GoogleGenerativeAI;
 
+// Rate limiting for Google API
+class RateLimiter {
+  private requests: number[] = [];
+  private readonly maxRequests: number = 14; // Keep under 15 limit
+  private readonly timeWindow: number = 60000; // 1 minute
+
+  canMakeRequest(): boolean {
+    const now = Date.now();
+    // Remove requests older than time window
+    this.requests = this.requests.filter(time => now - time < this.timeWindow);
+    
+    if (this.requests.length < this.maxRequests) {
+      this.requests.push(now);
+      return true;
+    }
+    return false;
+  }
+
+  getWaitTime(): number {
+    if (this.requests.length === 0) return 0;
+    const oldestRequest = Math.min(...this.requests);
+    const waitTime = this.timeWindow - (Date.now() - oldestRequest);
+    return Math.max(0, waitTime);
+  }
+}
+
+const apiRateLimiter = new RateLimiter();
+
 // Helper function to calculate image hash for duplicate detection
 function calculateImageHash(imagePath: string): string {
   try {
@@ -217,9 +245,17 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
     if (!genAI) {
       const apiKey = process.env.GOOGLE_API_KEY;
       if (!apiKey) {
-        throw new Error("GOOGLE_API_KEY environment variable is not set");
+        console.log("No Google API key available");
+        return null;
       }
       genAI = new GoogleGenerativeAI(apiKey);
+    }
+
+    // Check rate limit before making API call
+    if (!apiRateLimiter.canMakeRequest()) {
+      const waitTime = apiRateLimiter.getWaitTime();
+      console.log(`Rate limit reached. Need to wait ${Math.ceil(waitTime / 1000)} seconds.`);
+      return null; // Return null instead of throwing error
     }
     
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -383,9 +419,18 @@ Return ONLY the JSON object, no other text.`;
         body_type_recommendations: "Suitable for various body types"
       };
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI analysis failed:", error);
-    throw new Error("Failed to analyze image with AI");
+    
+    // Handle rate limit errors gracefully
+    if (error?.status === 429 || error?.message?.includes('quota')) {
+      console.log("Google API quota exceeded, skipping AI analysis");
+      return null;
+    }
+    
+    // For other errors, return null instead of throwing
+    console.log("AI analysis unavailable, continuing without it");
+    return null;
   }
 }
 
@@ -1178,15 +1223,15 @@ async function processUntaggedItemsOnStartup() {
               console.log(`Processed untagged item: ${item.name}`);
             }
           }
-        } catch (error) {
-          console.log(`Failed to process item ${item.id} on startup:`, error.message);
+        } catch (error: any) {
+          console.log(`Failed to process item ${item.id} on startup:`, error?.message || 'Unknown error');
         }
       }
     } else {
       console.log("No untagged items found on startup");
     }
-  } catch (error) {
-    console.log("Startup processing failed:", error.message);
+  } catch (error: any) {
+    console.log("Startup processing failed:", error?.message || 'Unknown error');
   }
 }
 
