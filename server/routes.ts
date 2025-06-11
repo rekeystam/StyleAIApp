@@ -57,22 +57,57 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
       if (fs.existsSync(existingImagePath)) {
         const existingImageHash = calculateImageHash(existingImagePath);
         
-        // Exact hash match
+        // Exact hash match - most reliable
         if (newImageHash === existingImageHash) {
+          console.log(`Exact duplicate detected: ${newImageHash} matches existing item "${item.name}"`);
           return item;
         }
         
-        // Additional check: compare file sizes (potential for near-duplicate detection)
+        // Enhanced similarity detection
         const newImageStats = fs.statSync(imagePath);
         const existingImageStats = fs.statSync(existingImagePath);
         const sizeDifference = Math.abs(newImageStats.size - existingImageStats.size);
+        const sizeRatio = Math.min(newImageStats.size, existingImageStats.size) / Math.max(newImageStats.size, existingImageStats.size);
         
-        // If files are very similar in size and have similar names, likely duplicates
-        if (sizeDifference < 1024 && // Less than 1KB difference
-            item.name.toLowerCase().includes('copy') && 
-            path.basename(imagePath).toLowerCase().includes('copy')) {
-          console.log(`Potential duplicate detected: similar size and copy naming pattern`);
-          return item;
+        // Very similar file sizes (within 2KB or 95% similarity)
+        const similarSize = sizeDifference < 2048 || sizeRatio > 0.95;
+        
+        if (similarSize) {
+          // Check for copy/duplicate naming patterns
+          const newFileName = path.basename(imagePath).toLowerCase();
+          const existingFileName = path.basename(existingImagePath).toLowerCase();
+          const itemNameLower = item.name.toLowerCase();
+          
+          const isCopyPattern = 
+            newFileName.includes('copy') || 
+            newFileName.includes('duplicate') || 
+            newFileName.includes('(1)') ||
+            newFileName.includes('(2)') ||
+            itemNameLower.includes('copy') ||
+            itemNameLower.includes('duplicate');
+          
+          // Check for very similar base names (without copy suffixes)
+          const baseNewName = newFileName.replace(/[-_\s]*(copy|duplicate|\(\d+\)).*$/i, '');
+          const baseExistingName = existingFileName.replace(/[-_\s]*(copy|duplicate|\(\d+\)).*$/i, '');
+          const baseItemName = itemNameLower.replace(/[-_\s]*(copy|duplicate|\(\d+\)).*$/i, '');
+          
+          const similarNames = 
+            baseNewName === baseExistingName || 
+            baseNewName === baseItemName ||
+            (baseNewName.length > 5 && baseExistingName.includes(baseNewName)) ||
+            (baseExistingName.length > 5 && baseNewName.includes(baseExistingName));
+          
+          if (isCopyPattern && similarNames) {
+            console.log(`Copy duplicate detected: similar size (${sizeDifference}B diff) and copy naming pattern`);
+            console.log(`New: ${newFileName}, Existing: ${existingFileName}, Item: ${itemNameLower}`);
+            return item;
+          }
+          
+          // Even stricter check: if files are nearly identical in size and have very similar names
+          if (sizeDifference < 512 && similarNames) {
+            console.log(`Near-identical duplicate detected: ${sizeDifference}B difference with similar names`);
+            return item;
+          }
         }
       }
     } catch (error) {
@@ -1098,33 +1133,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Item name is required" });
       }
 
-      // Check for duplicate names to prevent duplicate uploads
+      // Enhanced duplicate name detection
       const existingItems = await storage.getClothingItems(DEMO_USER_ID);
-      const duplicateName = existingItems.find(item => 
-        item.name.toLowerCase().trim() === name.toLowerCase().trim()
-      );
+      
+      // Clean and normalize names for comparison
+      const cleanName = (str: string) => str.toLowerCase().trim()
+        .replace(/[-_\s]*(copy|duplicate|\(\d+\)|\s-\scopy).*$/i, '')
+        .replace(/\s+/g, ' ');
+      
+      const normalizedNewName = cleanName(name);
+      
+      const duplicateName = existingItems.find(item => {
+        const normalizedExistingName = cleanName(item.name);
+        
+        // Exact match after normalization
+        if (normalizedExistingName === normalizedNewName) {
+          return true;
+        }
+        
+        // Check if one name contains the other (for variations like "jacket" vs "jacket - copy")
+        if (normalizedNewName.length > 3 && normalizedExistingName.length > 3) {
+          return normalizedExistingName.includes(normalizedNewName) || 
+                 normalizedNewName.includes(normalizedExistingName);
+        }
+        
+        return false;
+      });
       
       if (duplicateName) {
         // Delete the uploaded file since we're rejecting it
         fs.unlinkSync(req.file.path);
         return res.status(409).json({ 
-          error: "An item with this name already exists in your wardrobe",
+          error: "An item with a similar name already exists in your wardrobe",
           existingItem: duplicateName,
-          duplicateType: "name"
+          duplicateType: "name",
+          message: `"${name}" is too similar to existing item "${duplicateName.name}". Please use a more distinctive name.`
         });
       }
 
-      // Check for duplicate images using image hash comparison
+      // Check for duplicate images using enhanced image comparison
       const duplicateImage = await checkForDuplicateImage(req.file.path, DEMO_USER_ID);
       
       if (duplicateImage) {
         // Delete the uploaded file since we're rejecting it
         fs.unlinkSync(req.file.path);
         return res.status(409).json({ 
-          error: "This image has already been uploaded to your wardrobe",
+          error: "Duplicate image detected",
           existingItem: duplicateImage,
           duplicateType: "image",
-          message: `This image is identical to "${duplicateImage.name}" already in your wardrobe. Even with a different filename, we detected it's the same image.`
+          message: `This appears to be the same image as "${duplicateImage.name}" already in your wardrobe. We detected it's either identical or a copy/renamed version of an existing image.`
         });
       }
 
