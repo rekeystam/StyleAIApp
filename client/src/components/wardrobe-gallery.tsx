@@ -18,8 +18,6 @@ export function WardrobeGallery() {
 
   const { data: items = [], isLoading } = useQuery<ClothingItem[]>({
     queryKey: ['/api/clothing-items'],
-    staleTime: 0,
-    gcTime: 0,
   });
 
   const deleteMutation = useMutation({
