@@ -46,7 +46,7 @@ function calculateImageHash(imagePath: string): string {
   return crypto.createHash('md5').update(imageBuffer).digest('hex');
 }
 
-// Helper function to check for duplicate images
+// Helper function to check for duplicate images with enhanced similarity detection
 async function checkForDuplicateImage(imagePath: string, userId: number): Promise<ClothingItem | null> {
   const newImageHash = calculateImageHash(imagePath);
   const existingItems = await storage.getClothingItems(userId);
@@ -56,7 +56,22 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
       const existingImagePath = path.join(process.cwd(), item.imageUrl);
       if (fs.existsSync(existingImagePath)) {
         const existingImageHash = calculateImageHash(existingImagePath);
+        
+        // Exact hash match
         if (newImageHash === existingImageHash) {
+          return item;
+        }
+        
+        // Additional check: compare file sizes (potential for near-duplicate detection)
+        const newImageStats = fs.statSync(imagePath);
+        const existingImageStats = fs.statSync(existingImagePath);
+        const sizeDifference = Math.abs(newImageStats.size - existingImageStats.size);
+        
+        // If files are very similar in size and have similar names, likely duplicates
+        if (sizeDifference < 1024 && // Less than 1KB difference
+            item.name.toLowerCase().includes('copy') && 
+            path.basename(imagePath).toLowerCase().includes('copy')) {
+          console.log(`Potential duplicate detected: similar size and copy naming pattern`);
           return item;
         }
       }
@@ -145,29 +160,37 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
     const imageData = fs.readFileSync(imagePath);
     const base64Image = imageData.toString('base64');
     
-    const prompt = `Analyze this clothing item image with advanced object detection and semantic classification. Identify the SINGLE MOST PROMINENT item. Provide detailed analysis in this exact JSON format:
+    const prompt = `You are an expert fashion AI analyzer. Analyze this clothing/accessory image with precision. Identify the SINGLE MOST PROMINENT item and provide detailed classification.
+
+CRITICAL REQUIREMENTS:
+1. NEVER use "unknown" for colors - always identify specific colors
+2. Use precise subcategories for accessories (sunglasses, belt, hat, necklace, etc.)
+3. Classify style based on actual formality level, not default to casual
+4. Detect brand indicators when visible
+
+Provide analysis in this exact JSON format:
 
 {
-  "category": "tops",
-  "style": "sporty",
-  "subcategory": "tank_top",
-  "colors": ["olive_green", "black"],
-  "dominant_color": "olive_green",
-  "accent_colors": ["black"],
-  "fabric_type": "polyester_blend",
-  "pattern": "solid",
-  "formality": "very_casual",
-  "suitable_occasions": ["gym", "casual", "athleisure"],
-  "time_of_day": ["morning", "afternoon"],
-  "weather_suitability": ["warm", "mild"],
+  "category": "accessories",
+  "style": "fashion",
+  "subcategory": "sunglasses",
+  "colors": ["brown", "gold", "tortoiseshell"],
+  "dominant_color": "brown",
+  "accent_colors": ["gold"],
+  "fabric_type": "acetate_metal",
+  "pattern": "tortoiseshell",
+  "formality": "smart_casual",
+  "suitable_occasions": ["casual", "outdoor", "driving"],
+  "time_of_day": ["all_day"],
+  "weather_suitability": ["sunny", "bright"],
   "gender_style": "unisex",
-  "brand_indicators": "adidas_style_athletic",
-  "versatility_notes": "Perfect for workouts and athleisure styling",
-  "season": "spring_summer",
+  "brand_indicators": "designer_style",
+  "versatility_notes": "Classic style suitable for most face shapes",
+  "season": "all_season",
   "fit": "regular",
-  "description": "Athletic tank top in olive green with black accents",
-  "styling_tips": "Pair with athletic shorts or joggers for gym, or with jeans for casual athleisure look",
-  "body_type_recommendations": "Flattering for athletic builds, good for layering"
+  "description": "Tortoiseshell brown sunglasses with gold metal accents",
+  "styling_tips": "Perfect for completing casual to smart-casual outfits",
+  "body_type_recommendations": "Flattering for most face shapes"
 }
 
 ENHANCED CLASSIFICATION RULES:
@@ -175,22 +198,32 @@ ENHANCED CLASSIFICATION RULES:
 CATEGORY (MUST be ONE of):
 - tops, bottoms, dresses, outerwear, accessories, shoes, swimwear
 
-SUBCATEGORY (specific item type):
-- For accessories: belt, earrings, necklace, bracelet, watch, sunglasses, hat, scarf, gloves, socks
-- For shoes: sneakers, dress_shoes, boots, sandals, heels, flats, athletic_shoes
-- For tops: t_shirt, tank_top, blouse, shirt, sweater, hoodie, blazer
-- For bottoms: jeans, chinos, shorts, skirt, leggings, dress_pants
-- For swimwear: bikini, one_piece, swim_shorts, cover_up
+SUBCATEGORY (specific item type - REQUIRED):
+- For accessories: belt, earrings, necklace, bracelet, watch, sunglasses, hat, cap, scarf, gloves, socks, bag, purse
+- For shoes: sneakers, dress_shoes, boots, sandals, heels, flats, athletic_shoes, loafers, oxfords
+- For tops: t_shirt, tank_top, blouse, dress_shirt, sweater, hoodie, blazer, cardigan, polo
+- For bottoms: jeans, chinos, shorts, skirt, leggings, dress_pants, trousers, sweatpants
+- For dresses: casual_dress, formal_dress, cocktail_dress, maxi_dress, mini_dress
+- For outerwear: jacket, coat, blazer, cardigan, vest, windbreaker
+- For swimwear: bikini, one_piece, swim_shorts, cover_up, boardshorts
 
-STYLE CLASSIFICATION (context-aware):
-- sporty: Athletic wear, gym clothes, Adidas/Nike items, tank tops, athletic shorts, sneakers
-- casual: T-shirts, jeans, hoodies, casual sneakers, everyday wear
-- business: Collared shirts, dress pants, blazers, professional attire
-- formal: Suits, evening wear, dress shoes, formal dresses
-- swimwear: Bikinis, swimsuits, cover-ups, beach wear
-- bohemian: Flowy fabrics, ethnic patterns, artistic styles
-- vintage: Retro styles, classic cuts
-- modern: Contemporary, minimalist designs
+STYLE CLASSIFICATION (detect actual formality):
+- sporty: Athletic wear, gym clothes, branded sportswear (Adidas/Nike), athletic materials
+- casual: T-shirts, jeans, hoodies, casual sneakers, everyday comfort wear
+- smart_casual: Polo shirts, chinos, loafers, blazers with jeans, nice accessories
+- business: Collared dress shirts, dress pants, blazers, professional attire, formal shoes
+- formal: Suits, evening wear, dress shoes, formal dresses, ties, formal accessories
+- fashion: Trendy accessories, designer pieces, statement items, stylish casual wear
+- vintage: Retro styles, classic cuts, vintage-inspired pieces
+- bohemian: Flowy fabrics, ethnic patterns, artistic styles, natural materials
+
+MANDATORY COLOR DETECTION:
+- NEVER use "unknown" for colors
+- Always identify at least the dominant color
+- Use specific color names: navy, burgundy, olive, coral, mustard, cream, charcoal, etc.
+- For patterns: identify base color + pattern colors
+- For metallics: specify gold, silver, rose_gold, bronze, copper
+- For neutrals: be specific - ivory vs cream vs beige vs tan
 
 ENHANCED COLOR DETECTION:
 Detect ALL visible colors, not "unknown". Use specific color names:

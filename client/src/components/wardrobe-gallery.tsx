@@ -44,7 +44,7 @@ export function WardrobeGallery() {
   const validCategories = items
     .map(item => item.category)
     .filter(cat => cat && typeof cat === 'string' && cat.trim() !== '');
-  
+
   const categories = ['all', ...new Set(validCategories)];
   const filteredItems = filterCategory === 'all' ? items : items.filter(item => item.category === filterCategory);
 
@@ -72,6 +72,27 @@ export function WardrobeGallery() {
     };
     return badges[style] || style;
   };
+
+    // Helper function to convert color names to hex values (expand as needed)
+    const getColorValue = (color: string) => {
+      const colorMap: Record<string, string> = {
+        red: '#FF0000',
+        blue: '#0000FF',
+        green: '#008000',
+        black: '#000000',
+        white: '#FFFFFF',
+        gray: '#808080',
+        purple: '#800080',
+        yellow: '#FFFF00',
+        orange: '#FFA500',
+        brown: '#A52A2A',
+        beige: '#F5F5DC',
+        navy: '#000080',
+        burgundy: '#800020',
+      };
+      return colorMap[color.toLowerCase()] || '#ccc'; // Default to grey if color is unknown
+    };
+
 
   if (isLoading) {
     return (
@@ -157,69 +178,142 @@ export function WardrobeGallery() {
               const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
 
               return (
-                <Card 
-                  key={item.id} 
-                  className={`overflow-hidden group cursor-pointer hover:shadow-lg transition-all ${
-                    viewMode === 'list' ? 'flex' : ''
-                  }`}
-                >
-                  <div className={viewMode === 'list' ? 'w-32 h-32 flex-shrink-0' : 'w-full h-48'}>
-                    <img
-                      src={item.imageUrl}
-                      alt={item.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        // Fallback to a placeholder if image fails to load
-                        const target = e.target as HTMLImageElement;
-                        target.src = `data:image/svg+xml;base64,${btoa(`
-                          <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-                            <rect width="200" height="200" fill="#f3f4f6"/>
-                            <rect x="70" y="70" width="60" height="60" fill="#d1d5db"/>
-                            <text x="100" y="150" text-anchor="middle" fill="#6b7280" font-size="12" font-family="Arial">
-                              ${item.category}
-                            </text>
-                          </svg>
-                        `)}`;
-                      }}
-                    />
-                  </div>
-                  <CardContent className={`p-4 ${viewMode === 'list' ? 'flex-1' : ''}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-900 truncate">
-                        {item.name}
-                      </span>
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-3 h-3 rounded-full ${getCategoryColor(item.category)}`} />
+                  <Card key={item.id} className={`group relative overflow-hidden transition-all hover:shadow-lg ${
+                    viewMode === 'list' ? 'flex items-center p-4' : ''
+                  }`}>
+                    {viewMode === 'list' && (
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteMutation.mutate(item.id);
-                          }}
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteMutation.mutate(item.id)}
+                          disabled={deleteMutation.isPending}
                         >
-                          <Trash2 className="w-3 h-3 text-red-500" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+                    )}
+
+                    <div className={viewMode === 'list' ? 'flex-shrink-0 mr-4' : ''}>
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className={`object-cover transition-transform group-hover:scale-105 ${
+                          viewMode === 'list' ? 'w-20 h-20 rounded-lg' : 'w-full h-48'
+                        }`}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = `data:image/svg+xml,${encodeURIComponent(`
+                            <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+                              <rect width="200" height="200" fill="#f3f4f6"/>
+                              <text x="100" y="100" text-anchor="middle" fill="#9ca3af" font-size="14" font-family="Arial">
+                                Image not found
+                              </text>
+                            </svg>
+                          `)}`;
+                        }}
+                      />
                     </div>
-                    <Badge variant="secondary" className="text-xs mb-2">
-                      {getStyleBadge(item.style)}
-                    </Badge>
-                    {analysis.formality && (
-                      <div className="flex items-center space-x-1 text-xs text-gray-600">
-                        <Star className="w-3 h-3 text-yellow-400" />
-                        <span className="capitalize">{analysis.formality.replace('_', ' ')}</span>
+
+                    <CardContent className={`${viewMode === 'list' ? 'flex-1 p-0' : 'p-4'}`}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">
+                            {item.name}
+                          </h3>
+
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {/* Show subcategory if available, otherwise category */}
+                            <Badge variant="secondary" className={`${getCategoryColor(item.category)} text-white text-xs`}>
+                              {analysis.subcategory || item.category}
+                            </Badge>
+                            {item.style && (
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {item.style.replace('_', ' ')}
+                              </Badge>
+                            )}
+                            {analysis.formality && analysis.formality !== item.style && (
+                              <Badge variant="outline" className="text-xs text-purple-600 border-purple-200">
+                                {analysis.formality.replace('_', ' ')}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Enhanced color display */}
+                          {item.colors && item.colors.length > 0 && item.colors[0] !== 'unknown' && (
+                            <div className="mb-2">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs text-gray-500">Colors:</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {item.colors.slice(0, 4).map((color, index) => {
+                                    const colorValue = getColorValue(color);
+                                    return (
+                                      <div key={index} className="flex items-center gap-1">
+                                        <div
+                                          className="w-3 h-3 rounded-full border border-gray-300 shadow-sm"
+                                          style={{ backgroundColor: colorValue }}
+                                          title={color}
+                                        />
+                                        {index === 0 && (
+                                          <span className="text-xs text-gray-600 capitalize">
+                                            {color.replace('_', ' ')}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                  {item.colors.length > 4 && (
+                                    <span className="text-xs text-gray-500">
+                                      +{item.colors.length - 4}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Show additional AI analysis details */}
+                          {analysis.pattern && analysis.pattern !== 'unknown' && (
+                            <div className="text-xs text-gray-500 mb-1">
+                              Pattern: <span className="capitalize">{analysis.pattern.replace('_', ' ')}</span>
+                            </div>
+                          )}
+
+                          {analysis.fabric_type && analysis.fabric_type !== 'unknown' && (
+                            <div className="text-xs text-gray-500 mb-1">
+                              Material: <span className="capitalize">{analysis.fabric_type.replace('_', ' ')}</span>
+                            </div>
+                          )}
+
+                          {analysis.description && (
+                            <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                              {analysis.description}
+                            </p>
+                          )}
+
+                          {item.isVerified && (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <Star className="h-3 w-3 fill-current" />
+                              <span className="text-xs">AI Verified</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {viewMode === 'grid' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteMutation.mutate(item.id)}
+                            disabled={deleteMutation.isPending}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
-                    )}
-                    {viewMode === 'list' && analysis.description && (
-                      <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                        {analysis.description}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              );
+                    </CardContent>
+                  </Card>
+                );
             })}
           </div>
         )}
