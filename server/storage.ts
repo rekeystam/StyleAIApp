@@ -80,21 +80,27 @@ export class MemStorage implements IStorage {
     };
     this.users.set(1, sampleUser);
 
-    // Add comprehensive sample clothing items with weather data
+    // Add sample clothing items that need AI analysis (untagged)
     const sampleItems: ClothingItem[] = [
       {
         id: 1,
         userId: 1,
         name: "White Cotton T-Shirt",
         category: "tops",
-        style: "casual",
-        colors: ["white"],
+        subcategory: null,
+        style: "",
+        colors: [],
+        dominantColor: null,
+        accentColors: null,
         imageUrl: "/sample-tshirt.jpg",
-        aiAnalysis: '{"description":"Classic white cotton t-shirt","formality":"casual","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 2,
-        weatherSuitability: ["sun", "mild"],
-        fabricType: "cotton"
+        aiAnalysis: null,
+        isVerified: false,
+        warmthLevel: null,
+        weatherSuitability: null,
+        fabricType: null,
+        genderStyle: null,
+        timeOfDay: null,
+        occasionSuitability: null
       },
       {
         id: 2,
@@ -166,22 +172,9 @@ export class MemStorage implements IStorage {
         weatherSuitability: ["sun", "mild"],
         fabricType: "chiffon"
       },
+
       {
         id: 7,
-        userId: 1,
-        name: "High-Waisted Black Trousers",
-        category: "bottoms",
-        style: "professional",
-        colors: ["black"],
-        imageUrl: "/sample-trousers.jpg",
-        aiAnalysis: '{"description":"Professional high-waisted trousers","formality":"business_casual","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 3,
-        weatherSuitability: ["mild", "cool"],
-        fabricType: "wool_blend"
-      },
-      {
-        id: 8,
         userId: 1,
         name: "Brown Leather Belt",
         category: "accessories",
