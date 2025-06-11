@@ -115,7 +115,8 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
     const imageData = fs.readFileSync(imagePath);
     const base64Image = imageData.toString('base64');
     
-    const prompt = `Analyze this clothing item image and provide a detailed analysis in the following JSON format:
+    const prompt = `Analyze this clothing item image carefully and provide a detailed analysis in the following JSON format. Pay special attention to formality levels - blazers, suits, dress shirts, dress shoes, ties should be classified as formal/business, NOT casual:
+
 {
   "category": "tops|bottoms|dresses|outerwear|accessories|shoes",
   "style": "casual|formal|business|sporty|bohemian|vintage|modern",
@@ -131,6 +132,14 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
   "styling_tips": "how to style this item for different occasions",
   "body_type_recommendations": "which body types this works well for"
 }
+
+Classification guidelines:
+- Suits, blazers, sport coats = "formal" or "business" style, "formal" or "business_casual" formality
+- Dress shirts, button-down shirts = "business" style, "business_casual" formality  
+- Ties, cufflinks, dress watches = "formal" style, "formal" formality
+- Dress shoes (oxfords, loafers, brogues) = "formal" style, "formal" formality
+- T-shirts, hoodies, sneakers = "casual" style, "casual" formality
+- Jeans, sweatpants = "casual" style, "casual" formality
 
 Only return valid JSON, no additional text.`;
 
@@ -873,19 +882,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Item name is required" });
       }
 
-      // Check for duplicate names to prevent duplicate uploads
+      // Allow duplicate uploads - generate unique names if needed
       const existingItems = await storage.getClothingItems(DEMO_USER_ID);
-      const duplicateName = existingItems.find(item => 
-        item.name.toLowerCase().trim() === name.toLowerCase().trim()
-      );
+      let uniqueName = name;
+      let counter = 1;
       
-      if (duplicateName) {
-        // Delete the uploaded file since we're rejecting it
-        fs.unlinkSync(req.file.path);
-        return res.status(409).json({ 
-          error: "An item with this name already exists in your wardrobe",
-          existingItem: duplicateName
-        });
+      while (existingItems.find(item => 
+        item.name.toLowerCase().trim() === uniqueName.toLowerCase().trim()
+      )) {
+        uniqueName = `${name} (${counter})`;
+        counter++;
       }
 
       // Try to analyze image with AI, fallback if quota exceeded
@@ -914,7 +920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create clothing item
       const itemData = {
         userId: DEMO_USER_ID,
-        name,
+        name: uniqueName,
         category: analysis.category || "other",
         style: analysis.style || "casual",
         colors: analysis.colors || ["unknown"],
