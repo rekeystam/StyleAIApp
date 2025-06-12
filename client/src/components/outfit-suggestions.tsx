@@ -212,21 +212,20 @@ export function OutfitSuggestions() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-3 mb-4">
-                      {outfitItems.slice(0, 3).map((item: any, itemIndex) => (
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      {outfitItems.map((item: any, itemIndex) => (
                         <div key={itemIndex} className="relative">
                           <img
                             src={item?.imageUrl || '/placeholder.png'}
                             alt={item?.name || 'Clothing item'}
-                            className="w-full h-20 object-cover rounded-lg"
+                            className="w-full h-16 object-cover rounded-lg border border-gray-200"
+                            title={item?.name}
                           />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 rounded-b-lg truncate">
+                            {item?.name}
+                          </div>
                         </div>
                       ))}
-                      {outfitItems.length > 3 && (
-                        <div className="w-full h-20 bg-gray-200 rounded-lg flex items-center justify-center text-sm text-gray-600">
-                          +{outfitItems.length - 3} more
-                        </div>
-                      )}
                     </div>
                     
                     <p className="text-sm text-gray-600 mb-4 line-clamp-3">

@@ -973,7 +973,17 @@ OUTFIT REQUIREMENTS:
 - Confidence score based on weather suitability and style match
 - CRITICAL: ALL outfits MUST match the requested occasion: "${occasion}"
 - Filter items by their suitability for the requested occasion
-- MULTI-OCCASION STYLING: Show how items can work across occasions:
+
+WEATHER-AWARE LAYERING RULES:
+- Temperature < 10°C: MUST include outerwear (jacket/coat/blazer) + base layers
+- Temperature 10-20°C: Suggest light outerwear or layering options
+- Temperature > 20°C: Light clothing, breathable fabrics
+- Cold weather outfits should have 3-4 pieces: base layer + mid layer + outerwear + bottoms
+- Consider indoor comfort: suggest outfits that work when jacket is removed indoors
+- For business in cold weather: blazer/suit jacket + shirt + outerwear for outside
+- For casual in cold weather: sweater/hoodie + jacket + base layer
+
+MULTI-OCCASION STYLING: Show how items can work across occasions:
   * Blazers: casual with jeans, business with dress pants
   * Loafers/dress shoes: casual with chinos, business with suits
   * Button-down shirts: casual untucked, business tucked in
@@ -991,16 +1001,24 @@ Generate 5-6 COMPLETELY NEW outfit combinations in this JSON format:
     {
       "name": "unique descriptive name",
       "occasion": "${occasion}",
-      "item_ids": [1, 2, 3],
+      "item_ids": [1, 2, 3, 4],
       "confidence": 85,
-      "description": "explain weather appropriateness, color harmony, and style compatibility",
-      "styling_tips": "specific advice for the user's body type and preferences",
+      "description": "explain weather appropriateness, color harmony, style compatibility, and layering strategy",
+      "styling_tips": "specific layering advice - mention how outfit works indoors vs outdoors, what to remove when inside",
       "weather": "specific weather conditions this outfit suits",
       "temperature_range": "5-15°C",
       "season_suitability": "fall/winter"
     }
   ]
 }
+
+SPECIAL COLD WEATHER INSTRUCTIONS (Temperature < 15°C):
+- ALWAYS include outerwear (jackets, blazers, coats) in cold weather outfits
+- Create 3-4 piece outfits: base layer + middle layer + outerwear + bottoms
+- Mention in styling_tips how the outfit works when jacket is removed indoors
+- For business: shirt + blazer/suit jacket + optional coat for outside
+- For casual: t-shirt/shirt + sweater/hoodie + jacket + pants
+- Prioritize items that work well in layers
 
 RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
 
@@ -1060,17 +1078,33 @@ RETURN ONLY VALID JSON - NO ADDITIONAL TEXT.`;
           // Enhanced validation with weather-based confidence adjustments
           const selectedItems = userItems.filter(item => outfit.item_ids.includes(item.id));
           
-          // Weather-based confidence adjustments
+          // Weather-based confidence adjustments with layering logic
           if (weatherData) {
             const temp = weatherData.temperature;
             const condition = weatherData.condition.toLowerCase();
+            
+            // Enhanced layering requirements for cold weather
+            if (temp < 10) {
+              const hasOuterwear = selectedItems.some(item => 
+                item.category === 'outerwear' || 
+                (item.category === 'tops' && (item.style === 'business' || item.aiAnalysis?.includes('blazer')))
+              );
+              
+              if (!hasOuterwear) {
+                outfit.confidence = Math.max(40, (outfit.confidence || 80) - 30);
+                outfit.styling_tips = (outfit.styling_tips || '') + ' Add a jacket or coat for cold weather protection.';
+              } else {
+                outfit.confidence = Math.min(100, (outfit.confidence || 80) + 10);
+                outfit.styling_tips = (outfit.styling_tips || '') + ' Perfect layering for cold weather - remove outer layer when indoors.';
+              }
+            }
             
             // Check if items are weather-appropriate
             const weatherAppropriate = selectedItems.every(item => {
               if (!item.weatherSuitability) return true;
               
-              // Temperature appropriateness
-              if (temp < 5 && item.warmthLevel && item.warmthLevel < 3) return false;
+              // Temperature appropriateness with enhanced logic
+              if (temp < 5 && item.warmthLevel && item.warmthLevel < 2) return false;
               if (temp > 25 && item.warmthLevel && item.warmthLevel > 2) return false;
               
               // Condition appropriateness
