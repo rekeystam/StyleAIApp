@@ -534,6 +534,70 @@ Return ONLY the JSON object, no other text.`;
   }
 }
 
+// MANDATORY: Outfit Structure Validation Based on Upload Rules
+function validateMandatoryOutfitStructure(itemIds: number[], userItems: ClothingItem[], temperature: number): boolean {
+  const selectedItems = userItems.filter(item => itemIds.includes(item.id));
+  
+  if (selectedItems.length < 3) {
+    console.log(`STRUCTURE VIOLATION: Outfit has ${selectedItems.length} items, minimum 3 required`);
+    return false;
+  }
+
+  // Group items by category
+  const categories = {
+    bottoms: selectedItems.filter(item => item.category === 'bottoms'),
+    tops: selectedItems.filter(item => item.category === 'tops'),
+    shoes: selectedItems.filter(item => item.category === 'shoes'),
+    outerwear: selectedItems.filter(item => item.category === 'outerwear'),
+    accessories: selectedItems.filter(item => item.category === 'accessories')
+  };
+
+  // MANDATORY: Base requirements validation
+  if (categories.bottoms.length === 0) {
+    console.log(`STRUCTURE VIOLATION: No bottomwear (pants/jeans/skirts) included`);
+    return false;
+  }
+  
+  if (categories.tops.length === 0) {
+    console.log(`STRUCTURE VIOLATION: No topwear (shirt/t-shirt/blouse) included`);
+    return false;
+  }
+  
+  if (categories.shoes.length === 0) {
+    console.log(`STRUCTURE VIOLATION: No footwear (sneakers/boots/heels) included`);
+    return false;
+  }
+
+  // CONDITIONAL: Outerwear rule for cold weather
+  if (temperature < 14) {
+    const availableOuterwear = userItems.filter(item => item.category === 'outerwear');
+    if (availableOuterwear.length > 0 && categories.outerwear.length === 0) {
+      console.log(`STRUCTURE VIOLATION: Temperature ${temperature}°C requires outerwear, but none included`);
+      return false;
+    }
+  }
+
+  // CONDITIONAL: Cold accessories rule
+  if (temperature < 10) {
+    const availableColdAccessories = userItems.filter(item => 
+      item.category === 'accessories' && 
+      (item.subcategory?.includes('glove') || item.subcategory?.includes('scarf') || item.subcategory?.includes('hat') || item.subcategory?.includes('beanie'))
+    );
+    if (availableColdAccessories.length > 0) {
+      const includedColdAccessories = categories.accessories.filter(item =>
+        item.subcategory?.includes('glove') || item.subcategory?.includes('scarf') || item.subcategory?.includes('hat') || item.subcategory?.includes('beanie')
+      );
+      if (includedColdAccessories.length === 0) {
+        console.log(`STRUCTURE VIOLATION: Temperature ${temperature}°C requires cold weather accessories, but none included`);
+        return false;
+      }
+    }
+  }
+
+  console.log(`STRUCTURE VALID: Outfit meets mandatory requirements for ${temperature}°C`);
+  return true;
+}
+
 // ULTRA-FLEXIBLE: Fashion Stylist Validation System - Supporting Multi-Occasion Items
 function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[]): boolean {
   const selectedItems = userItems.filter(item => itemIds.includes(item.id));
@@ -808,7 +872,7 @@ async function generateAdvancedOutfitSuggestions(userId: number, occasion?: stri
       aiAnalysis: item.aiAnalysis ? JSON.parse(item.aiAnalysis) : null
     }));
 
-    const advancedPrompt = `You are an expert fashion stylist AI using Gemini 2.0. Create sophisticated outfit combinations with comprehensive personal styling advice.
+    const advancedPrompt = `You are an expert fashion stylist AI using Gemini 2.0. Create sophisticated outfit combinations following MANDATORY outfit generation rules.
 
 USER PROFILE:
 ${JSON.stringify(profileData, null, 2)}
@@ -818,6 +882,40 @@ ${JSON.stringify(environmentalContext, null, 2)}
 
 AVAILABLE WARDROBE:
 ${JSON.stringify(wardrobeData, null, 2)}
+
+MANDATORY OUTFIT GENERATION RULES:
+
+1. BASE REQUIREMENTS (3 Items Minimum):
+   - BOTTOMWEAR: Must include pants, jeans, joggers, or skirts (category: "bottoms")
+   - TOPWEAR: Must include t-shirt, shirt, hoodie, or blouse (category: "tops")  
+   - FOOTWEAR: Must include sneakers, boots, or heels (category: "shoes")
+
+2. CONDITIONAL OUTERWEAR RULE:
+   - IF temperature < 14°C AND outerwear exists in wardrobe
+   - THEN add jacket, coat, padded vest, or parka (category: "outerwear")
+
+3. COLD ACCESSORIES RULE:
+   - IF temperature < 10°C AND items available in wardrobe
+   - THEN add gloves, scarf, or beanie/hat (category: "accessories")
+
+4. SOCKS RULE:
+   - IF socks available in wardrobe AND wearing sneakers/boots
+   - THEN add appropriate socks: sports socks for sportswear, casual socks for daily outfits
+
+5. BELT RULE:
+   - IF bottomwear supports belt AND belt available in wardrobe
+   - THEN add matching belt (category: "accessories", subcategory: "belt")
+
+6. OPTIONAL ACCESSORIES (Only if uploaded):
+   - Sunglasses (if sunny weather)
+   - Bag/backpack (for outing/casual/business occasions)
+   - Watch, jewelry, cap (by user preference)
+
+CRITICAL VALIDATION:
+- Every outfit MUST have at least one item from each: bottoms, tops, shoes
+- Never suggest items not in the available wardrobe
+- Apply temperature-based rules strictly
+- Validate all item IDs exist in wardrobe before including
 
 ADVANCED STYLING REQUIREMENTS:
 
@@ -867,14 +965,25 @@ ADVANCED STYLING REQUIREMENTS:
 8. MAKEUP SUGGESTIONS:
    ${profileData.makeupPreference ? 'Include appropriate makeup palette suggestions based on outfit colors and occasion' : 'Skip makeup suggestions as user preference is set to false'}
 
-Generate 3-5 expert outfit combinations. Each outfit MUST include specific item IDs from the wardrobe and provide detailed styling rationale.
+Generate 3-5 expert outfit combinations. Each outfit MUST follow mandatory structure rules and include specific item IDs from the wardrobe.
+
+MANDATORY VALIDATION CHECKLIST FOR EACH OUTFIT:
+- ✓ Include at least one item from BOTTOMS category (pants/jeans/skirts)
+- ✓ Include at least one item from TOPS category (shirts/t-shirts/blouses) 
+- ✓ Include at least one item from SHOES category (sneakers/boots/heels)
+- ✓ Add OUTERWEAR if temperature < 14°C and available
+- ✓ Add cold accessories if temperature < 10°C and available
+- ✓ Add socks if available and wearing sneakers/boots
+- ✓ Add belt if bottomwear supports it and available
+- ✓ Add sunglasses if sunny weather and available
+- ✓ Only use item IDs that exist in the wardrobe
 
 Response format (JSON only):
 {
   "outfits": [
     {
       "name": "descriptive outfit name",
-      "item_ids": [specific IDs from wardrobe],
+      "item_ids": [specific IDs from wardrobe that meet mandatory requirements],
       "confidence": 85,
       "description": "detailed outfit description with styling rationale",
       "personal_fit_analysis": "how this outfit works with user's personal characteristics",
@@ -889,7 +998,8 @@ Response format (JSON only):
       "body_type_optimization": "how outfit flatters user's body type",
       "age_appropriateness": "style considerations for user's age",
       "temperature_range": "suitable temperature range",
-      "formality_level": "casual/business casual/formal classification"
+      "formality_level": "casual/business casual/formal classification",
+      "structure_compliance": "confirmation that outfit meets mandatory base requirements"
     }
   ]
 }`;
@@ -911,13 +1021,38 @@ Response format (JSON only):
       const parsed = JSON.parse(cleanText);
       
       if (parsed.outfits && Array.isArray(parsed.outfits)) {
+        // Apply mandatory outfit structure validation
+        const structurallyValidOutfits = parsed.outfits.filter((outfit: any) => {
+          if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) return false;
+          const selectedItems = userItems.filter(item => outfit.item_ids.includes(item.id));
+          
+          // Check mandatory base requirements: bottoms, tops, shoes
+          const hasBottoms = selectedItems.some(item => item.category === 'bottoms');
+          const hasTops = selectedItems.some(item => item.category === 'tops');
+          const hasShoes = selectedItems.some(item => item.category === 'shoes');
+          
+          if (!hasBottoms || !hasTops || !hasShoes) {
+            console.log(`STRUCTURE VIOLATION: Missing mandatory categories - bottoms: ${hasBottoms}, tops: ${hasTops}, shoes: ${hasShoes}`);
+            return false;
+          }
+          
+          return selectedItems.length >= 3;
+        });
+
         // Validate that all item IDs exist in user's wardrobe
-        const validatedOutfits = parsed.outfits.filter((outfit: any) => {
+        const validatedOutfits = structurallyValidOutfits.filter((outfit: any) => {
           if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) return false;
           return outfit.item_ids.every((id: any) => userItems.some(item => item.id === id));
         });
         
-        console.log(`Advanced outfit generation: ${validatedOutfits.length} valid outfits created`);
+        console.log(`Advanced outfit generation: ${validatedOutfits.length} valid outfits created (${parsed.outfits.length - validatedOutfits.length} rejected for structure violations)`);
+        
+        // If no structurally valid outfits, fallback to basic generation
+        if (validatedOutfits.length === 0) {
+          console.log("No valid outfits from AI - falling back to basic generation with mandatory structure");
+          return generateBasicOutfitCombinations(userItems, new Set(), occasion);
+        }
+        
         return validatedOutfits;
       }
     } catch (parseError) {
