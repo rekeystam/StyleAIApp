@@ -852,9 +852,9 @@ Response format (JSON only):
       
       if (parsed.outfits && Array.isArray(parsed.outfits)) {
         // Validate that all item IDs exist in user's wardrobe
-        const validatedOutfits = parsed.outfits.filter(outfit => {
+        const validatedOutfits = parsed.outfits.filter((outfit: any) => {
           if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) return false;
-          return outfit.item_ids.every(id => userItems.some(item => item.id === id));
+          return outfit.item_ids.every((id: any) => userItems.some(item => item.id === id));
         });
         
         console.log(`Advanced outfit generation: ${validatedOutfits.length} valid outfits created`);
@@ -1911,7 +1911,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user profile for personalization
       const userProfile = await storage.getUser(DEMO_USER_ID);
       
-      const suggestions = await generateOutfitSuggestions(
+      // Try advanced Gemini 2.0 suggestions first, fallback to basic if needed
+      const suggestions = await generateAdvancedOutfitSuggestions(
         DEMO_USER_ID, 
         occasion as string, 
         weatherData || undefined,
