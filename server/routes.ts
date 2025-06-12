@@ -74,12 +74,12 @@ function calculateImageHash(imagePath: string): string {
     const imageBuffer = fs.readFileSync(imagePath);
     // Use SHA256 for better reliability than MD5
     const hash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-    console.log(`Calculated hash for ${path.basename(imagePath)}: ${hash.substring(0, 8)}s${hash.substring(8, 16)}`);
+    console.log(`Calculated hash for ${path.basename(imagePath)}: ${hash.substring(0, 16)}...`);
     return hash;
   } catch (error) {
     console.error(`Error calculating hash for ${imagePath}:`, error);
     // Return a unique hash if calculation fails to prevent false positives
-    return crypto.createHash('sha256').update(imagePath + Date.now() + Math.random()).digest('hex');
+    return crypto.createHash('sha256').update(imagePath + Date.now()).digest('hex');
   }
 }
 
@@ -102,14 +102,14 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
           return item;
         }
         
-        // Enhanced similarity detection - much stricter to avoid false positives
+        // Enhanced similarity detection
         const newImageStats = fs.statSync(imagePath);
         const existingImageStats = fs.statSync(existingImagePath);
         const sizeDifference = Math.abs(newImageStats.size - existingImageStats.size);
         const sizeRatio = Math.min(newImageStats.size, existingImageStats.size) / Math.max(newImageStats.size, existingImageStats.size);
         
-        // Very strict similarity detection - only flag if extremely similar
-        const similarSize = sizeDifference < 100 && sizeRatio > 0.995; // Much stricter: 100 bytes and 99.5% ratio
+        // More aggressive similarity detection - stricter thresholds
+        const similarSize = sizeDifference < 1024 || sizeRatio > 0.98; // Reduced from 2KB to 1KB, increased ratio from 95% to 98%
         
         if (similarSize) {
           const newFileName = path.basename(imagePath).toLowerCase();
@@ -147,14 +147,26 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
             (baseNewName.length > 4 && baseItemName.includes(baseNewName)) ||
             (baseItemName.length > 4 && baseNewName.includes(baseItemName));
           
-          // Very strict duplicate detection - only flag obvious duplicates
-          if (isCopyPattern && sizeDifference < 50 && similarNames) {
-            console.log(`STRICT DUPLICATE DETECTED: Size diff ${sizeDifference}B, ratio ${sizeRatio.toFixed(3)}`);
+          // Stricter duplicate detection
+          if (isCopyPattern || (sizeDifference < 512 && similarNames)) {
+            console.log(`SIMILAR DUPLICATE DETECTED: Size diff ${sizeDifference}B, ratio ${sizeRatio.toFixed(3)}`);
             console.log(`Copy pattern: ${isCopyPattern}, Similar names: ${similarNames}`);
             console.log(`New: "${newFileName}" -> "${baseNewName}"`);
             console.log(`Existing: "${existingFileName}" -> "${baseExistingName}"`);
             console.log(`Item: "${itemNameLower}" -> "${baseItemName}"`);
             return item;
+          }
+          
+          // Additional check: if file sizes are very close and any AI analysis matches
+          if (sizeDifference < 256) {
+            try {
+              const existingAnalysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
+              // If we have two images of very similar size, consider them potential duplicates
+              console.log(`VERY SIMILAR SIZE DETECTED: ${sizeDifference}B difference - potential duplicate of "${item.name}"`);
+              return item;
+            } catch (e) {
+              // Continue if analysis parsing fails
+            }
           }
         }
       }
