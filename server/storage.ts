@@ -1,13 +1,10 @@
 import {
-  users, clothingItems, outfits, weatherData, shoppingRecommendations,
   type User, type InsertUser, type UpdateUserProfile,
   type ClothingItem, type InsertClothingItem,
   type Outfit, type InsertOutfit,
   type WeatherData, type InsertWeatherData,
   type ShoppingRecommendation, type InsertShoppingRecommendation
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, and, like } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -62,14 +59,8 @@ export class MemStorage implements IStorage {
     this.initializeSampleData();
   }
 
-  private async initializeSampleData() {
-    // Clear any existing sample items to ensure clean start
-    await db.delete(clothingItems).where(
-      and(
-        eq(clothingItems.userId, 1),
-        like(clothingItems.imageUrl, '/sample-%')
-      )
-    );
+  private initializeSampleData() {
+    // Initialize sample data in memory storage
 
     // Create sample user with personalization data
     const sampleUser: User = {
@@ -109,7 +100,7 @@ export class MemStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    for (const user of this.users.values()) {
+    for (const user of Array.from(this.users.values())) {
       if (user.username === username) {
         return user;
       }
@@ -156,11 +147,15 @@ export class MemStorage implements IStorage {
     const item: ClothingItem = {
       ...insertItem,
       id,
+      subcategory: insertItem.subcategory ?? null,
       isVerified: false,
       aiAnalysis: null,
       warmthLevel: insertItem.warmthLevel ?? null,
       weatherSuitability: insertItem.weatherSuitability ?? null,
-      fabricType: insertItem.fabricType ?? null
+      fabricType: insertItem.fabricType ?? null,
+      genderStyle: insertItem.genderStyle ?? null,
+      timeOfDay: insertItem.timeOfDay ?? null,
+      occasionSuitability: insertItem.occasionSuitability ?? null
     };
     this.clothingItems.set(id, item);
     return item;
