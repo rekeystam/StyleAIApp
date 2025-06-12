@@ -9,14 +9,34 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
+interface ClothingItem {
+  id: number;
+  name: string;
+  category: string;
+  colors: string[];
+  imageUrl: string;
+}
+
 interface OutfitSuggestion {
   name: string;
-  occasion: string;
+  occasion?: string;
   item_ids: number[];
   confidence: number;
   description: string;
-  styling_tips: string;
+  styling_tips?: string;
   weather?: string;
+  personal_fit_analysis?: string;
+  layering_strategy?: string;
+  color_coordination?: string;
+  occasion_appropriateness?: string;
+  weather_adaptation?: string;
+  accessories_rationale?: string;
+  footwear_justification?: string;
+  makeup_suggestion?: string;
+  body_type_optimization?: string;
+  age_appropriateness?: string;
+  temperature_range?: string;
+  formality_level?: string;
 }
 
 export function OutfitSuggestions() {
@@ -41,7 +61,7 @@ export function OutfitSuggestions() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const { data: clothingItems = [] } = useQuery({
+  const { data: clothingItems = [] } = useQuery<ClothingItem[]>({
     queryKey: ['/api/clothing-items'],
   });
 
@@ -74,7 +94,7 @@ export function OutfitSuggestions() {
   });
 
   const getItemsByIds = (itemIds: number[]) => {
-    return itemIds.map(id => clothingItems.find((item: any) => item.id === id)).filter(Boolean);
+    return itemIds.map(id => clothingItems.find(item => item.id === id)).filter(Boolean) as ClothingItem[];
   };
 
   const getOccasionIcon = (occasion: string) => {
@@ -201,7 +221,7 @@ export function OutfitSuggestions() {
               return (
                 <Card
                   key={index}
-                  className={`bg-gradient-to-br ${getOccasionColor(outfit.occasion)} shadow-sm hover:shadow-lg transition-shadow`}
+                  className={`bg-gradient-to-br ${getOccasionColor(outfit.occasion || 'casual')} shadow-sm hover:shadow-lg transition-shadow`}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
@@ -241,8 +261,8 @@ export function OutfitSuggestions() {
                     <div className="flex justify-between items-center">
                       <div className="flex items-center space-x-2">
                         <Badge variant="outline" className="text-xs">
-                          <span className="mr-1">{getOccasionIcon(outfit.occasion)}</span>
-                          {outfit.occasion.replace('_', ' ')}
+                          <span className="mr-1">{getOccasionIcon(outfit.occasion || 'casual')}</span>
+                          {(outfit.occasion || 'casual').replace('_', ' ')}
                         </Badge>
                         {outfit.weather && (
                           <span className="text-xs text-gray-500">{outfit.weather}</span>
