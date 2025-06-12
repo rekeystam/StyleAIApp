@@ -7,12 +7,15 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   bodyType: text("body_type"), // pear, apple, hourglass, rectangle, inverted_triangle
-  skinTone: text("skin_tone"), // warm, cool, neutral
+  skinTone: text("skin_tone"), // warm, cool, neutral, light, medium, dark
   age: integer("age"),
   height: integer("height"), // in cm
+  hairColor: text("hair_color"), // blonde, brunette, black, red, gray, white, other
+  hairLength: text("hair_length"), // short, medium, long
   gender: text("gender"), // male, female, non_binary, prefer_not_to_say
   location: text("location"), // city, country for weather detection
   preferences: text("preferences"), // JSON string of style preferences
+  makeupPreference: boolean("makeup_preference").default(false), // whether user wants makeup suggestions
 });
 
 export const clothingItems = pgTable("clothing_items", {
@@ -80,9 +83,12 @@ export const updateUserProfileSchema = createInsertSchema(users).pick({
   skinTone: true,
   age: true,
   height: true,
+  hairColor: true,
+  hairLength: true,
   gender: true,
   location: true,
   preferences: true,
+  makeupPreference: true,
 });
 
 export const insertClothingItemSchema = createInsertSchema(clothingItems).omit({

@@ -675,6 +675,204 @@ async function generateShoppingRecommendations(userId: number, outfits: any[], u
 
 
 
+async function generateAdvancedOutfitSuggestions(userId: number, occasion?: string, weatherData?: WeatherData, userProfile?: User): Promise<any[]> {
+  try {
+    // Initialize genAI if not already done
+    if (!genAI) {
+      const apiKey = process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        console.log("No Google API key available for advanced suggestions");
+        return generateBasicOutfitCombinations(await storage.getClothingItems(userId), new Set(), occasion);
+      }
+      genAI = new GoogleGenerativeAI(apiKey);
+    }
+
+    // Check rate limit before making API call
+    if (!apiRateLimiter.canMakeRequest()) {
+      const waitTime = apiRateLimiter.getWaitTime();
+      console.log(`Rate limit reached. Need to wait ${Math.ceil(waitTime / 1000)} seconds.`);
+      return generateBasicOutfitCombinations(await storage.getClothingItems(userId), new Set(), occasion);
+    }
+
+    const userItems = await storage.getClothingItems(userId);
+    const user = userProfile || await storage.getUser(userId);
+    
+    if (userItems.length === 0) {
+      return [];
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    
+    // Build comprehensive user profile for AI
+    const profileData = {
+      age: user?.age || null,
+      bodyType: user?.bodyType || null,
+      height: user?.height || null,
+      skinTone: user?.skinTone || null,
+      hairColor: user?.hairColor || null,
+      hairLength: user?.hairLength || null,
+      gender: user?.gender || null,
+      makeupPreference: user?.makeupPreference || false,
+      preferences: user?.preferences ? JSON.parse(user.preferences) : null
+    };
+
+    // Weather and environmental context
+    const environmentalContext = {
+      weather: weatherData ? {
+        temperature: weatherData.temperature,
+        condition: weatherData.condition,
+        humidity: weatherData.humidity,
+        windSpeed: weatherData.windSpeed
+      } : null,
+      season: weatherData ? getSeasonFromTemperature(weatherData.temperature) : 'spring',
+      timeOfDay: getTimeOfDay(),
+      occasion: occasion || 'casual'
+    };
+
+    // Prepare wardrobe data for AI analysis
+    const wardrobeData = userItems.map(item => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      subcategory: item.subcategory,
+      style: item.style,
+      colors: item.colors,
+      dominantColor: item.dominantColor,
+      accentColors: item.accentColors,
+      warmthLevel: item.warmthLevel,
+      weatherSuitability: item.weatherSuitability,
+      fabricType: item.fabricType,
+      genderStyle: item.genderStyle,
+      timeOfDay: item.timeOfDay,
+      occasionSuitability: item.occasionSuitability,
+      aiAnalysis: item.aiAnalysis ? JSON.parse(item.aiAnalysis) : null
+    }));
+
+    const advancedPrompt = `You are an expert fashion stylist AI using Gemini 2.0. Create sophisticated outfit combinations with comprehensive personal styling advice.
+
+USER PROFILE:
+${JSON.stringify(profileData, null, 2)}
+
+ENVIRONMENTAL CONTEXT:
+${JSON.stringify(environmentalContext, null, 2)}
+
+AVAILABLE WARDROBE:
+${JSON.stringify(wardrobeData, null, 2)}
+
+ADVANCED STYLING REQUIREMENTS:
+
+1. PERSONAL CHARACTERISTICS ADAPTATION:
+   - Consider user's age for age-appropriate styling
+   - Adapt to body type with flattering silhouettes
+   - Account for height in proportions and styling
+   - Match colors to skin tone for optimal appearance
+   - Consider hair color/length for overall harmony
+
+2. SMART LAYERING SYSTEM:
+   - For temperatures below 15°C: Include warm outer layer (coat/jacket)
+   - Add appropriate underlayers (shirts, sweaters, thermals) based on temperature
+   - Suggest scarves, gloves, hats for temperatures below 5°C
+   - Remove layers appropriately for temperatures above 25°C
+
+3. GARMENT COORDINATION LOGIC:
+   - Ensure color harmony using color theory principles
+   - Match formality levels across all items
+   - Consider fabric compatibility and texture mixing
+   - Ensure style consistency or intentional contrast
+
+4. WEATHER-APPROPRIATE SELECTIONS:
+   - Rain: Suggest waterproof outerwear, appropriate footwear
+   - Sun: Include sun protection, breathable fabrics
+   - Wind: Consider wind-resistant outer layers
+   - Snow: Ensure warm, weather-proof items
+
+5. ACCESSORIES INTELLIGENCE:
+   - Only suggest accessories that exist in the wardrobe
+   - Match watch/jewelry to outfit formality
+   - Coordinate bag style with occasion
+   - Ensure belt matches shoes when both are included
+
+6. FOOTWEAR LOGIC:
+   - Match shoe style to occasion (formal/casual/athletic)
+   - Consider weather appropriateness
+   - Ensure comfort for planned activities
+   - Coordinate colors with outfit palette
+
+7. FORMAL WEAR STANDARDS:
+   - For blazers/suits: Ensure proper shirt selection
+   - Coordinate ties/pocket squares when available
+   - Match belt to shoes in formal contexts
+   - Consider dress code requirements
+
+8. MAKEUP SUGGESTIONS:
+   ${profileData.makeupPreference ? 'Include appropriate makeup palette suggestions based on outfit colors and occasion' : 'Skip makeup suggestions as user preference is set to false'}
+
+Generate 3-5 expert outfit combinations. Each outfit MUST include specific item IDs from the wardrobe and provide detailed styling rationale.
+
+Response format (JSON only):
+{
+  "outfits": [
+    {
+      "name": "descriptive outfit name",
+      "item_ids": [specific IDs from wardrobe],
+      "confidence": 85,
+      "description": "detailed outfit description with styling rationale",
+      "personal_fit_analysis": "how this outfit works with user's personal characteristics",
+      "layering_strategy": "detailed layering approach for current conditions",
+      "color_coordination": "color theory explanation for chosen combination",
+      "occasion_appropriateness": "why this works for the specified occasion",
+      "weather_adaptation": "how outfit addresses current weather conditions",
+      "styling_tips": "specific tips for wearing this outfit",
+      "accessories_rationale": "explanation of accessory choices",
+      "footwear_justification": "why these shoes work with this outfit",
+      "makeup_suggestion": "${profileData.makeupPreference ? 'specific makeup palette and style recommendations' : 'N/A - user preference disabled'}",
+      "body_type_optimization": "how outfit flatters user's body type",
+      "age_appropriateness": "style considerations for user's age",
+      "temperature_range": "suitable temperature range",
+      "formality_level": "casual/business casual/formal classification"
+    }
+  ]
+}`;
+
+    const result = await model.generateContent(advancedPrompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log("Advanced Gemini 2.0 outfit suggestions response:", text);
+    
+    try {
+      // Clean and parse the response
+      let cleanText = text.replace(/```json\s*/g, '').replace(/\s*```/g, '').trim();
+      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanText = jsonMatch[0];
+      }
+      
+      const parsed = JSON.parse(cleanText);
+      
+      if (parsed.outfits && Array.isArray(parsed.outfits)) {
+        // Validate that all item IDs exist in user's wardrobe
+        const validatedOutfits = parsed.outfits.filter(outfit => {
+          if (!outfit.item_ids || !Array.isArray(outfit.item_ids)) return false;
+          return outfit.item_ids.every(id => userItems.some(item => item.id === id));
+        });
+        
+        console.log(`Advanced outfit generation: ${validatedOutfits.length} valid outfits created`);
+        return validatedOutfits;
+      }
+    } catch (parseError) {
+      console.error("Failed to parse advanced outfit suggestions:", parseError);
+    }
+    
+    // Fallback to basic system if AI fails
+    return generateBasicOutfitCombinations(userItems, new Set(), occasion);
+    
+  } catch (error) {
+    console.error("Advanced outfit generation failed:", error);
+    return generateBasicOutfitCombinations(await storage.getClothingItems(userId), new Set(), occasion);
+  }
+}
+
 async function generateOutfitSuggestions(userId: number, occasion?: string, weatherData?: WeatherData, userProfile?: User): Promise<any[]> {
   const userItems = await storage.getClothingItems(userId);
   
