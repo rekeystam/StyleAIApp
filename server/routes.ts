@@ -267,33 +267,35 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
 
 CRITICAL REQUIREMENTS:
 1. NEVER use "unknown" for colors - always identify specific colors
-2. Use precise subcategories for accessories (sunglasses, belt, hat, necklace, etc.)
+2. Use VERY SPECIFIC subcategories and detailed descriptions
 3. Classify style based on actual formality level, not default to casual
 4. Detect brand indicators when visible
+5. Provide EXTENSIVE details about the item type and characteristics
 
 Provide analysis in this exact JSON format:
 
 {
   "category": "accessories",
-  "style": "fashion",
-  "subcategory": "sunglasses",
-  "colors": ["brown", "gold", "tortoiseshell"],
-  "dominant_color": "brown",
-  "accent_colors": ["gold"],
-  "fabric_type": "acetate_metal",
-  "pattern": "tortoiseshell",
-  "formality": "smart_casual",
-  "suitable_occasions": ["casual", "outdoor", "driving"],
+  "style": "business",
+  "subcategory": "necktie",
+  "item_type": "men's silk necktie",
+  "colors": ["dusty_rose", "mauve"],
+  "dominant_color": "dusty_rose",
+  "accent_colors": ["mauve"],
+  "fabric_type": "silk",
+  "pattern": "textured_weave",
+  "formality": "business",
+  "suitable_occasions": ["business_meetings", "formal_events", "weddings"],
   "time_of_day": ["all_day"],
-  "weather_suitability": ["sunny", "bright"],
-  "gender_style": "unisex",
-  "brand_indicators": "designer_style",
-  "versatility_notes": "Classic style suitable for most face shapes",
+  "weather_suitability": ["all_weather"],
+  "gender_style": "masculine",
+  "brand_indicators": "premium_quality",
+  "versatility_notes": "Classic professional necktie suitable for business and formal occasions",
   "season": "all_season",
-  "fit": "regular",
-  "description": "Tortoiseshell brown sunglasses with gold metal accents",
-  "styling_tips": "Perfect for completing casual to smart-casual outfits",
-  "body_type_recommendations": "Flattering for most face shapes"
+  "fit": "standard_width",
+  "description": "Men's dusty rose silk necktie with textured weave pattern, premium quality business accessory",
+  "styling_tips": "Pairs excellently with white or light blue dress shirts, navy or charcoal suits",
+  "body_type_recommendations": "Standard width suitable for most body types"
 }
 
 ENHANCED CLASSIFICATION RULES:
@@ -301,14 +303,29 @@ ENHANCED CLASSIFICATION RULES:
 CATEGORY (MUST be ONE of):
 - tops, bottoms, dresses, outerwear, accessories, shoes, swimwear
 
-SUBCATEGORY (specific item type - REQUIRED):
-- For accessories: belt, earrings, necklace, bracelet, watch, sunglasses, hat, cap, scarf, gloves, socks, bag, purse
-- For shoes: sneakers, dress_shoes, boots, sandals, heels, flats, athletic_shoes, loafers, oxfords
-- For tops: t_shirt, tank_top, blouse, dress_shirt, sweater, hoodie, blazer, cardigan, polo
-- For bottoms: jeans, chinos, shorts, skirt, leggings, dress_pants, trousers, sweatpants
-- For dresses: casual_dress, formal_dress, cocktail_dress, maxi_dress, mini_dress
-- For outerwear: jacket, coat, blazer, cardigan, vest, windbreaker
-- For swimwear: bikini, one_piece, swim_shorts, cover_up, boardshorts
+SUBCATEGORY & ITEM_TYPE (BE EXTREMELY SPECIFIC):
+
+FOR ACCESSORIES - Use precise subcategory + detailed item_type:
+- necktie → "men's silk necktie", "skinny tie", "bow tie", "formal necktie"
+- belt → "leather dress belt", "casual fabric belt", "chain belt", "wide waist belt"
+- watch → "luxury dress watch", "sports watch", "digital watch", "smartwatch"
+- sunglasses → "aviator sunglasses", "cat-eye sunglasses", "round frame sunglasses"
+- jewelry → "statement necklace", "delicate chain bracelet", "pearl earrings", "wedding ring"
+- bags → "leather handbag", "canvas tote bag", "evening clutch", "crossbody bag"
+- hat → "fedora hat", "baseball cap", "winter beanie", "sun hat"
+
+FOR SHOES - Use specific subcategory + detailed seasonal/occasion type:
+- sandals → "open-toe cork sandals", "strappy evening sandals", "sport sandals", "slide sandals"
+- sneakers → "white leather sneakers", "running shoes", "high-top sneakers", "slip-on sneakers"
+- boots → "ankle boots", "winter snow boots", "rain boots", "hiking boots", "dress boots"
+- heels → "stiletto heels", "block heels", "wedge sandals", "kitten heels"
+- flats → "ballet flats", "pointed-toe flats", "loafers", "boat shoes"
+- dress_shoes → "oxford dress shoes", "penny loafers", "patent leather shoes", "monk strap shoes"
+
+FOR TOPS:
+- dress_shirt → "formal white dress shirt", "striped business shirt", "casual button-down"
+- t_shirt → "basic cotton t-shirt", "graphic tee", "fitted v-neck", "oversized tee"
+- blouse → "silk blouse", "peasant blouse", "wrap blouse", "sleeveless blouse"
 
 STYLE CLASSIFICATION (detect actual formality):
 - sporty: Athletic wear, gym clothes, branded sportswear (Adidas/Nike), athletic materials
@@ -328,32 +345,41 @@ MANDATORY COLOR DETECTION:
 - For metallics: specify gold, silver, rose_gold, bronze, copper
 - For neutrals: be specific - ivory vs cream vs beige vs tan
 
+DETAILED DESCRIPTION REQUIREMENTS:
+- For accessories: Specify exact type (men's necktie vs bow tie vs ascot)
+- For shoes: Include closure type (lace-up, slip-on, buckle, zipper)
+- For shoes: Specify toe style (open-toe, closed-toe, pointed, round)
+- For shoes: Include heel information (flat, low heel, high heel, platform)
+- For shoes: Mention seasonal appropriateness (summer sandals, winter boots)
+- For shoes: Include material details (leather, canvas, suede, synthetic)
+
 ENHANCED COLOR DETECTION:
 Detect ALL visible colors, not "unknown". Use specific color names:
 - Primary colors: red, blue, yellow, green, orange, purple
 - Neutrals: black, white, grey, beige, tan, cream, ivory
-- Specific tones: navy, burgundy, olive, maroon, teal, coral, etc.
+- Specific tones: navy, burgundy, olive, maroon, teal, coral, dusty_rose, mauve
 - Always identify dominant_color and accent_colors separately
 
-FOOTWEAR CONTEXTUALIZATION:
-For shoes, specify time_of_day and occasion suitability:
-- time_of_day: morning, afternoon, evening, all_day
-- occasion_suitability: casual, business, formal, athletic, outdoor
+FOOTWEAR DETAILED ANALYSIS:
+For shoes, specify these additional details:
+- closure_type: "lace-up", "slip-on", "buckle", "zipper", "velcro", "elastic"
+- toe_style: "open-toe", "closed-toe", "pointed", "round", "square", "peep-toe"
+- heel_type: "flat", "low_heel", "high_heel", "stiletto", "block_heel", "wedge", "platform"
+- seasonal_use: "summer", "winter", "all_season", "spring_fall"
+- weather_protection: "waterproof", "breathable", "insulated", "ventilated"
+- surface_finish: "matte", "glossy", "patent", "textured", "suede"
 
-ACCESSORY PERSONALIZATION:
-For accessories, include gender_style and context:
-- gender_style: masculine, feminine, unisex
-- context_appropriate: work, casual, formal, sport, evening
+ACCESSORY DETAILED ANALYSIS:
+For accessories, include these specifics:
+- width_style: "standard", "skinny", "wide", "extra_wide" (for ties/belts)
+- closure_type: "buckle", "snap", "magnetic", "tie", "clasp"
+- occasion_formality: "everyday", "business", "formal_events", "special_occasions"
 
 BUSINESS/FORMAL DETECTION:
 - Collared shirts, tailored pants → business
 - Fine materials (silk, wool), structured cuts → formal
 - Athletic materials, loose fits → sporty
 - Denim, cotton casual fits → casual
-
-SWIMWEAR CLASSIFICATION:
-- One-piece suits, bikinis → swimwear category
-- Beach cover-ups → swimwear or casual depending on style
 
 Return ONLY the JSON object, no other text.`;
 
@@ -383,11 +409,15 @@ Return ONLY the JSON object, no other text.`;
       console.log("Cleaned AI response:", cleanText);
       const parsed = JSON.parse(cleanText);
       
-      // Normalize arrays to single values (take first element)
+      // Normalize arrays to single values (take first element) and include new detailed fields
       const normalized = {
         category: Array.isArray(parsed.category) ? parsed.category[0] : parsed.category,
+        subcategory: Array.isArray(parsed.subcategory) ? parsed.subcategory[0] : parsed.subcategory,
+        item_type: parsed.item_type || parsed.subcategory, // New detailed item type
         style: Array.isArray(parsed.style) ? parsed.style[0] : parsed.style,
         colors: Array.isArray(parsed.colors) ? (Array.isArray(parsed.colors[0]) ? parsed.colors[0] : parsed.colors) : [parsed.colors],
+        dominant_color: parsed.dominant_color,
+        accent_colors: parsed.accent_colors,
         fabric_type: Array.isArray(parsed.fabric_type) ? parsed.fabric_type[0] : parsed.fabric_type,
         pattern: Array.isArray(parsed.pattern) ? parsed.pattern[0] : parsed.pattern,
         formality: Array.isArray(parsed.formality) ? parsed.formality[0] : parsed.formality,
@@ -397,7 +427,17 @@ Return ONLY the JSON object, no other text.`;
         fit: Array.isArray(parsed.fit) ? parsed.fit[0] : parsed.fit,
         description: parsed.description,
         styling_tips: parsed.styling_tips,
-        body_type_recommendations: parsed.body_type_recommendations
+        body_type_recommendations: parsed.body_type_recommendations,
+        // New detailed fields for shoes and accessories
+        closure_type: parsed.closure_type,
+        toe_style: parsed.toe_style,
+        heel_type: parsed.heel_type,
+        seasonal_use: parsed.seasonal_use,
+        weather_protection: parsed.weather_protection,
+        surface_finish: parsed.surface_finish,
+        width_style: parsed.width_style,
+        occasion_formality: parsed.occasion_formality,
+        gender_style: parsed.gender_style
       };
       
       return normalized;
