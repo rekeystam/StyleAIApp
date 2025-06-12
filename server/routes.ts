@@ -1753,9 +1753,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let parsedPreferences = null;
       if (user.preferences) {
         try {
-          parsedPreferences = typeof user.preferences === 'string' 
-            ? JSON.parse(user.preferences) 
-            : user.preferences;
+          if (typeof user.preferences === 'string' && user.preferences.trim()) {
+            parsedPreferences = JSON.parse(user.preferences);
+          } else if (typeof user.preferences === 'object' && user.preferences !== null) {
+            parsedPreferences = user.preferences;
+          }
         } catch (e) {
           console.error("Error parsing preferences:", e);
           parsedPreferences = null;
@@ -1763,12 +1765,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const profile = {
-        bodyType: user.bodyType,
-        skinTone: user.skinTone,
-        age: user.age,
-        height: user.height,
-        gender: user.gender,
-        location: user.location,
+        bodyType: user.bodyType || "",
+        skinTone: user.skinTone || "",
+        age: user.age || null,
+        height: user.height || null,
+        gender: user.gender || "",
+        location: user.location || "",
         preferences: parsedPreferences
       };
       

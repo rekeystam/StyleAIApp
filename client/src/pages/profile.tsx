@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -48,46 +48,53 @@ export default function Profile() {
   const form = useForm<UpdateUserProfile>({
     resolver: zodResolver(updateUserProfileSchema),
     defaultValues: {
-      bodyType: user?.bodyType || "",
-      skinTone: user?.skinTone || "",
-      age: user?.age || 25,
-      height: user?.height || 170,
-      gender: user?.gender || "",
-      location: user?.location || "",
-      preferences: user?.preferences || "",
+      bodyType: "",
+      skinTone: "",
+      age: 25,
+      height: 170,
+      gender: "",
+      location: "",
+      preferences: "",
     },
   });
 
   // Update form when user data loads
-  if (user && !form.getValues().bodyType && user.bodyType) {
-    form.reset({
-      bodyType: user.bodyType || "",
-      skinTone: user.skinTone || "",
-      age: user.age || 25,
-      height: user.height || 170,
-      gender: user.gender || "",
-      location: user.location || "",
-      preferences: user.preferences || "",
-    });
+  React.useEffect(() => {
+    if (user) {
+      form.reset({
+        bodyType: user.bodyType || "",
+        skinTone: user.skinTone || "",
+        age: user.age || 25,
+        height: user.height || 170,
+        gender: user.gender || "",
+        location: user.location || "",
+        preferences: user.preferences || "",
+      });
 
-    // Parse preferences if they exist
-    if (user.preferences) {
-      try {
-        if (typeof user.preferences === 'string') {
-          const prefs = JSON.parse(user.preferences);
+      // Parse preferences if they exist
+      if (user.preferences) {
+        try {
+          let prefs;
+          if (typeof user.preferences === 'string') {
+            prefs = JSON.parse(user.preferences);
+          } else if (typeof user.preferences === 'object' && user.preferences !== null) {
+            prefs = user.preferences;
+          }
+          
           if (prefs && Array.isArray(prefs.styles)) {
             setSelectedPreferences(prefs.styles);
+          } else {
+            setSelectedPreferences([]);
           }
-        } else if (user.preferences && Array.isArray(user.preferences.styles)) {
-          setSelectedPreferences(user.preferences.styles);
+        } catch (e) {
+          console.error("Error parsing preferences:", e);
+          setSelectedPreferences([]);
         }
-      } catch (e) {
-        console.error("Error parsing preferences:", e);
-        // Set empty preferences on parse error
+      } else {
         setSelectedPreferences([]);
       }
     }
-  }
+  }, [user, form]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (data: UpdateUserProfile) => 
