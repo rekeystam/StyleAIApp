@@ -1,11 +1,13 @@
-import { 
+import {
   users, clothingItems, outfits, weatherData, shoppingRecommendations,
   type User, type InsertUser, type UpdateUserProfile,
-  type ClothingItem, type InsertClothingItem, 
+  type ClothingItem, type InsertClothingItem,
   type Outfit, type InsertOutfit,
   type WeatherData, type InsertWeatherData,
   type ShoppingRecommendation, type InsertShoppingRecommendation
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and, like } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -60,7 +62,15 @@ export class MemStorage implements IStorage {
     this.initializeSampleData();
   }
 
-  private initializeSampleData() {
+  private async initializeSampleData() {
+    // Clear any existing sample items to ensure clean start
+    await db.delete(clothingItems).where(
+      and(
+        eq(clothingItems.userId, 1),
+        like(clothingItems.imageUrl, '/sample-%')
+      )
+    );
+
     // Create sample user with personalization data
     const sampleUser: User = {
       id: 1,
@@ -80,176 +90,7 @@ export class MemStorage implements IStorage {
     };
     this.users.set(1, sampleUser);
 
-    // Add sample clothing items that need AI analysis (untagged)
-    const sampleItems: ClothingItem[] = [
-      {
-        id: 1,
-        userId: 1,
-        name: "White Cotton T-Shirt",
-        category: "tops",
-        subcategory: null,
-        style: "",
-        colors: [],
-        dominantColor: null,
-        accentColors: null,
-        imageUrl: "/sample-tshirt.jpg",
-        aiAnalysis: null,
-        isVerified: false,
-        warmthLevel: null,
-        weatherSuitability: null,
-        fabricType: null,
-        genderStyle: null,
-        timeOfDay: null,
-        occasionSuitability: null
-      },
-      {
-        id: 2,
-        userId: 1,
-        name: "Blue Denim Jeans",
-        category: "bottoms",
-        style: "casual",
-        colors: ["blue"],
-        imageUrl: "/sample-jeans.jpg",
-        aiAnalysis: '{"description":"Classic blue denim jeans","formality":"casual","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 3,
-        weatherSuitability: ["sun", "mild", "cool"],
-        fabricType: "denim"
-      },
-      {
-        id: 3,
-        userId: 1,
-        name: "Navy Business Shirt",
-        category: "tops",
-        style: "business",
-        colors: ["navy"],
-        imageUrl: "/sample-business-shirt.jpg",
-        aiAnalysis: '{"description":"Professional navy dress shirt","formality":"business_casual","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 2,
-        weatherSuitability: ["sun", "mild", "cool"],
-        fabricType: "cotton"
-      },
-      {
-        id: 4,
-        userId: 1,
-        name: "Khaki Chinos",
-        category: "bottoms",
-        style: "business_casual",
-        colors: ["khaki"],
-        imageUrl: "/sample-chinos.jpg",
-        aiAnalysis: '{"description":"Smart casual khaki chinos","formality":"business_casual","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 3,
-        weatherSuitability: ["sun", "mild"],
-        fabricType: "cotton"
-      },
-      {
-        id: 5,
-        userId: 1,
-        name: "Little Black Dress",
-        category: "dresses",
-        style: "formal",
-        colors: ["black"],
-        imageUrl: "/sample-dress.jpg",
-        aiAnalysis: '{"description":"Elegant little black dress","formality":"formal","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 2,
-        weatherSuitability: ["mild", "cool"],
-        fabricType: "polyester"
-      },
-      {
-        id: 6,
-        userId: 1,
-        name: "Floral Print Blouse",
-        category: "tops",
-        style: "feminine",
-        colors: ["pink", "white"],
-        imageUrl: "/sample-blouse.jpg",
-        aiAnalysis: '{"description":"Feminine floral print blouse","formality":"smart_casual","season":"spring_summer"}',
-        isVerified: true,
-        warmthLevel: 2,
-        weatherSuitability: ["sun", "mild"],
-        fabricType: "chiffon"
-      },
-
-      {
-        id: 7,
-        userId: 1,
-        name: "Brown Leather Belt",
-        category: "accessories",
-        style: "classic",
-        colors: ["brown"],
-        imageUrl: "/sample-belt.jpg",
-        aiAnalysis: '{"description":"Classic brown leather belt","formality":"versatile","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 1,
-        weatherSuitability: ["sun", "mild", "cool", "rain"],
-        fabricType: "leather"
-      },
-      {
-        id: 9,
-        userId: 1,
-        name: "Black Leather Pumps",
-        category: "shoes",
-        style: "formal",
-        colors: ["black"],
-        imageUrl: "/sample-pumps.jpg",
-        aiAnalysis: '{"description":"Classic black leather pumps","formality":"formal","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 1,
-        weatherSuitability: ["sun", "mild", "cool"],
-        fabricType: "leather"
-      },
-      {
-        id: 10,
-        userId: 1,
-        name: "White Sneakers",
-        category: "shoes",
-        style: "casual",
-        colors: ["white"],
-        imageUrl: "/sample-sneakers.jpg",
-        aiAnalysis: '{"description":"Comfortable white sneakers","formality":"casual","season":"all_season"}',
-        isVerified: true,
-        warmthLevel: 2,
-        weatherSuitability: ["sun", "mild"],
-        fabricType: "synthetic"
-      },
-      {
-        id: 11,
-        userId: 1,
-        name: "Grey Wool Skirt",
-        category: "bottoms",
-        style: "professional",
-        colors: ["grey"],
-        imageUrl: "/sample-skirt.jpg",
-        aiAnalysis: '{"description":"Professional grey wool skirt","formality":"business_casual","season":"fall_winter"}',
-        isVerified: true,
-        warmthLevel: 3,
-        weatherSuitability: ["cool", "cold"],
-        fabricType: "wool"
-      },
-      {
-        id: 12,
-        userId: 1,
-        name: "Burgundy Cardigan",
-        category: "outerwear",
-        style: "cozy",
-        colors: ["burgundy"],
-        imageUrl: "/sample-cardigan.jpg",
-        aiAnalysis: '{"description":"Cozy burgundy cardigan","formality":"casual","season":"fall_winter"}',
-        isVerified: true,
-        warmthLevel: 4,
-        weatherSuitability: ["cool", "cold"],
-        fabricType: "wool"
-      }
-    ];
-
-    sampleItems.forEach(item => {
-      this.clothingItems.set(item.id, item);
-      this.currentClothingItemId = Math.max(this.currentClothingItemId, item.id + 1);
-    });
-
+    // No sample items loaded automatically - users start with an empty wardrobe
     // Add sample weather data
     const sampleWeather: WeatherData = {
       id: 1,
@@ -278,8 +119,8 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
-    const user: User = { 
-      ...insertUser, 
+    const user: User = {
+      ...insertUser,
       id,
       bodyType: null,
       skinTone: null,
@@ -312,8 +153,8 @@ export class MemStorage implements IStorage {
 
   async createClothingItem(insertItem: InsertClothingItem): Promise<ClothingItem> {
     const id = this.currentClothingItemId++;
-    const item: ClothingItem = { 
-      ...insertItem, 
+    const item: ClothingItem = {
+      ...insertItem,
       id,
       isVerified: false,
       aiAnalysis: null,
@@ -355,8 +196,8 @@ export class MemStorage implements IStorage {
 
   async createOutfit(insertOutfit: InsertOutfit): Promise<Outfit> {
     const id = this.currentOutfitId++;
-    const outfit: Outfit = { 
-      ...insertOutfit, 
+    const outfit: Outfit = {
+      ...insertOutfit,
       id,
       isSaved: false,
       occasion: null,
@@ -389,8 +230,8 @@ export class MemStorage implements IStorage {
 
   async createWeatherData(weather: InsertWeatherData): Promise<WeatherData> {
     const id = this.currentWeatherDataId++;
-    const data: WeatherData = { 
-      ...weather, 
+    const data: WeatherData = {
+      ...weather,
       id,
       timestamp: new Date()
     };
@@ -404,8 +245,8 @@ export class MemStorage implements IStorage {
 
   async createShoppingRecommendation(recommendation: InsertShoppingRecommendation): Promise<ShoppingRecommendation> {
     const id = this.currentShoppingRecommendationId++;
-    const rec: ShoppingRecommendation = { 
-      ...recommendation, 
+    const rec: ShoppingRecommendation = {
+      ...recommendation,
       id,
       created: new Date()
     };
