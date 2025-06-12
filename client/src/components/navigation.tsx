@@ -22,7 +22,7 @@ export function Navigation() {
             </div>
             <h1 className="text-xl font-bold text-gray-900 font-serif">StyleSync</h1>
           </Link>
-          
+
           <div className="hidden md:flex items-center space-x-6">
             {navItems.map((item) => (
               <a

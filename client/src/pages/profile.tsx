@@ -73,12 +73,18 @@ export default function Profile() {
     // Parse preferences if they exist
     if (user.preferences) {
       try {
-        const prefs = JSON.parse(user.preferences);
-        if (Array.isArray(prefs.styles)) {
-          setSelectedPreferences(prefs.styles);
+        if (typeof user.preferences === 'string') {
+          const prefs = JSON.parse(user.preferences);
+          if (prefs && Array.isArray(prefs.styles)) {
+            setSelectedPreferences(prefs.styles);
+          }
+        } else if (user.preferences && Array.isArray(user.preferences.styles)) {
+          setSelectedPreferences(user.preferences.styles);
         }
       } catch (e) {
         console.error("Error parsing preferences:", e);
+        // Set empty preferences on parse error
+        setSelectedPreferences([]);
       }
     }
   }
@@ -145,14 +151,23 @@ export default function Profile() {
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-indigo-500 rounded-xl flex items-center justify-center">
-              <UserIcon className="text-white w-6 h-6" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-indigo-500 rounded-xl flex items-center justify-center">
+                <UserIcon className="text-white w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 font-serif">Profile Settings</h1>
+                <p className="text-gray-600">Personalize your style recommendations</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 font-serif">Profile Settings</h1>
-              <p className="text-gray-600">Personalize your style recommendations</p>
-            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.href = '/'}
+              className="flex items-center gap-2"
+            >
+              ← Back to Wardrobe
+            </Button>
           </div>
         </div>
 

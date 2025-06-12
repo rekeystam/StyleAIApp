@@ -1749,6 +1749,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
       
+      // Parse preferences before sending response
+      let parsedPreferences = null;
+      if (user.preferences) {
+        try {
+          parsedPreferences = typeof user.preferences === 'string' 
+            ? JSON.parse(user.preferences) 
+            : user.preferences;
+        } catch (e) {
+          console.error("Error parsing preferences:", e);
+          parsedPreferences = null;
+        }
+      }
+      
       const profile = {
         bodyType: user.bodyType,
         skinTone: user.skinTone,
@@ -1756,7 +1769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         height: user.height,
         gender: user.gender,
         location: user.location,
-        preferences: user.preferences ? JSON.parse(user.preferences) : null
+        preferences: parsedPreferences
       };
       
       res.json(profile);
@@ -1781,6 +1794,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
       
+      // Parse preferences before sending response
+      let parsedPreferences = null;
+      if (updatedUser.preferences) {
+        try {
+          parsedPreferences = typeof updatedUser.preferences === 'string' 
+            ? JSON.parse(updatedUser.preferences) 
+            : updatedUser.preferences;
+        } catch (e) {
+          console.error("Error parsing preferences in response:", e);
+          parsedPreferences = null;
+        }
+      }
+      
       res.json({
         bodyType: updatedUser.bodyType,
         skinTone: updatedUser.skinTone,
@@ -1788,7 +1814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         height: updatedUser.height,
         gender: updatedUser.gender,
         location: updatedUser.location,
-        preferences: updatedUser.preferences ? JSON.parse(updatedUser.preferences) : null
+        preferences: parsedPreferences
       });
     } catch (error) {
       console.error("Failed to update user profile:", error);
