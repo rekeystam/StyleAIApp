@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -80,7 +80,7 @@ export default function Profile() {
           } else if (typeof user.preferences === 'object' && user.preferences !== null) {
             prefs = user.preferences;
           }
-          
+
           if (prefs && Array.isArray(prefs.styles)) {
             setSelectedPreferences(prefs.styles);
           } else {
@@ -132,7 +132,7 @@ export default function Profile() {
     const preferences = {
       styles: selectedPreferences,
     };
-    
+
     updateProfileMutation.mutate({
       ...data,
       preferences: JSON.stringify(preferences),
@@ -155,7 +155,7 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
