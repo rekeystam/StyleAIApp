@@ -86,19 +86,32 @@ function calculateImageHash(imagePath: string): string {
   }
 }
 
-// Reasonable filename validation to prevent obvious duplicates
+// Enhanced filename validation to prevent duplicate bypassing
 function validateFileName(fileName: string, existingItems: ClothingItem[]): { isValid: boolean; reason?: string; conflictingItem?: ClothingItem } {
   const normalizedName = fileName.toLowerCase().trim();
   
-  // Only check for exact name matches - allow natural variations
+  // Remove common copy suffixes and variations for comparison
+  const cleanName = normalizedName
+    .replace(/\s*-?\s*copy\s*\d*$/i, '')
+    .replace(/\s*\(\d+\)$/i, '')
+    .replace(/\s*_copy\s*$/i, '')
+    .replace(/\s*-\s*\d+$/i, '')
+    .trim();
+  
   for (const item of existingItems) {
     const existingName = item.name.toLowerCase().trim();
+    const cleanExistingName = existingName
+      .replace(/\s*-?\s*copy\s*\d*$/i, '')
+      .replace(/\s*\(\d+\)$/i, '')
+      .replace(/\s*_copy\s*$/i, '')
+      .replace(/\s*-\s*\d+$/i, '')
+      .trim();
     
-    // Only reject exact matches
-    if (normalizedName === existingName) {
+    // Check exact matches and cleaned name matches
+    if (normalizedName === existingName || cleanName === cleanExistingName) {
       return {
         isValid: false,
-        reason: "Exact name match with existing item",
+        reason: "Duplicate or near-duplicate name detected",
         conflictingItem: item
       };
     }
@@ -121,6 +134,8 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
       if (fs.existsSync(existingImagePath)) {
         const existingImageHash = calculateImageHash(existingImagePath);
         
+        console.log(`Comparing: new ${newImageHash.substring(0, 16)}... vs existing ${existingImageHash.substring(0, 16)}... for item "${item.name}"`);
+        
         // Only exact hash matches are considered duplicates
         if (newImageHash === existingImageHash) {
           console.log(`EXACT DUPLICATE DETECTED: Hash matches existing item "${item.name}" (ID: ${item.id})`);
@@ -132,6 +147,7 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
     }
   }
   
+  console.log(`No duplicate found for hash ${newImageHash.substring(0, 16)}...`);
   return null;
 }
 
