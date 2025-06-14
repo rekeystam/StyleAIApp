@@ -62,21 +62,25 @@ export class MemStorage implements IStorage {
   private initializeSampleData() {
     // Initialize sample data in memory storage
 
-    // Create sample user with personalization data
+    // Create demo male user profile with fixed attributes for testing
     const sampleUser: User = {
       id: 1,
       username: "demo",
       password: "demo",
-      bodyType: "hourglass",
-      skinTone: "warm",
-      age: 28,
-      height: 165,
-      gender: "female",
+      bodyType: "average",
+      skinTone: "medium-dark",
+      age: 40,
+      height: 177,
+      hairColor: "brunette",
+      hairLength: "short",
+      gender: "male",
       location: "New York, NY",
+      makeupPreference: false,
       preferences: JSON.stringify({
-        favoriteColors: ["navy", "white", "black"],
-        preferredStyles: ["casual", "business_casual"],
-        avoidColors: ["orange"]
+        favoriteColors: ["navy", "black", "white", "grey", "burgundy"],
+        preferredStyles: ["business", "smart_casual", "casual"],
+        avoidColors: ["neon", "bright_pink", "lime"],
+        occasions: ["work", "casual", "formal", "weekend", "business_meetings"]
       })
     };
     this.users.set(1, sampleUser);

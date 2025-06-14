@@ -244,22 +244,33 @@ async function fetchWeatherData(location: string): Promise<WeatherData | null> {
   try {
     // Check if we have cached weather data
     const cached = await storage.getWeatherData(location);
-    if (cached && cached.timestamp && (Date.now() - cached.timestamp.getTime()) < 3600000) {
-      return cached; // Return cached data if less than 1 hour old
+    if (cached && cached.timestamp && (Date.now() - cached.timestamp.getTime()) < 1800000) { // 30 minutes cache
+      return cached;
     }
 
-    // For demo purposes, generate realistic weather data based on location
-    // In production, this would use a real weather API like OpenWeatherMap
-    const weatherConditions = ['sunny', 'cloudy', 'rainy', 'snowy'];
-    const baseTemp = location.toLowerCase().includes('new york') ? 15 : 20;
-    const temp = baseTemp + Math.floor(Math.random() * 20) - 10;
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    if (!apiKey) {
+      console.error('OpenWeather API key not found');
+      return null;
+    }
+
+    const response = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=metric`
+    );
+    
+    if (!response.ok) {
+      console.error('Weather API request failed:', response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
     
     const weatherData = await storage.createWeatherData({
       location,
-      temperature: temp,
-      condition: weatherConditions[Math.floor(Math.random() * weatherConditions.length)],
-      humidity: 40 + Math.floor(Math.random() * 40),
-      windSpeed: Math.floor(Math.random() * 25)
+      temperature: Math.round(data.main.temp),
+      condition: data.weather[0].main.toLowerCase(),
+      humidity: data.main.humidity,
+      windSpeed: Math.round(data.wind?.speed * 3.6) || 0 // Convert m/s to km/h
     });
     
     return weatherData;
