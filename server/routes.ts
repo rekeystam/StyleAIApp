@@ -206,7 +206,7 @@ function getTimeOfDay(): string {
   return 'night';
 }
 
-async function analyzeClothingImage(imagePath: string): Promise<any> {
+async function analyzeClothingImage(imagePath: string, retryCount: number = 0): Promise<any> {
   try {
     // Initialize genAI if not already done
     if (!genAI) {
@@ -222,7 +222,15 @@ async function analyzeClothingImage(imagePath: string): Promise<any> {
     if (!apiRateLimiter.canMakeRequest()) {
       const waitTime = apiRateLimiter.getWaitTime();
       console.log(`Rate limit reached. Need to wait ${Math.ceil(waitTime / 1000)} seconds.`);
-      return null; // Return null instead of throwing error
+      
+      // For retry attempts, wait and try again (max 2 retries)
+      if (retryCount < 2) {
+        console.log(`Scheduling retry attempt ${retryCount + 1} in ${Math.ceil(waitTime / 1000)} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
+        return analyzeClothingImage(imagePath, retryCount + 1);
+      }
+      
+      return null; // Return null after max retries
     }
     
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -1654,7 +1662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI analysis endpoint for untagged items
+  // AI analysis endpoint for untagged items with rate limiting
   app.post("/api/clothing-items/analyze-untagged", async (req, res) => {
     try {
       // Get all untagged/unverified items for the user
@@ -1676,51 +1684,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let processedCount = 0;
       const results = [];
+      const batchSize = 5; // Process in smaller batches to manage rate limits
 
-      for (const item of untaggedItems) {
-        try {
-          // Only analyze if image exists
-          if (item.imageUrl && fs.existsSync(path.join(process.cwd(), item.imageUrl.replace('/', '')))) {
-            const imagePath = path.join(process.cwd(), item.imageUrl.replace('/', ''));
-            const analysis = await analyzeClothingImage(imagePath);
-            
-            if (analysis) {
-              // Update item with AI analysis results
-              const updatedItem = await storage.updateClothingItem(item.id, {
-                subcategory: analysis.subcategory || null,
-                style: analysis.style || "casual",
-                colors: analysis.colors || [],
-                dominantColor: analysis.dominant_color || null,
-                accentColors: analysis.accent_colors || null,
-                fabricType: analysis.fabric_type || null,
-                genderStyle: analysis.gender_style || null,
-                timeOfDay: analysis.time_of_day || null,
-                occasionSuitability: analysis.suitable_occasions || null,
-                weatherSuitability: analysis.weather_suitability || null,
-                warmthLevel: analysis.formality === "formal" ? 2 : 
-                           analysis.formality === "business" ? 3 : 
-                           analysis.formality === "casual" ? 1 : 2,
-                aiAnalysis: JSON.stringify(analysis),
-                isVerified: true
-              });
-
-              if (updatedItem) {
-                processedCount++;
-                results.push({
-                  id: item.id,
-                  name: item.name,
-                  category: analysis.category || item.category,
-                  subcategory: analysis.subcategory,
-                  style: analysis.style,
-                  colors: analysis.colors,
-                  useCase: analysis.formality,
-                  stylingTips: analysis.styling_tips
+      for (let i = 0; i < untaggedItems.length; i += batchSize) {
+        const batch = untaggedItems.slice(i, i + batchSize);
+        
+        for (const item of batch) {
+          try {
+            // Only analyze if image exists
+            if (item.imageUrl && fs.existsSync(path.join(process.cwd(), item.imageUrl.replace('/', '')))) {
+              const imagePath = path.join(process.cwd(), item.imageUrl.replace('/', ''));
+              const analysis = await analyzeClothingImage(imagePath);
+              
+              if (analysis) {
+                // Update item with AI analysis results
+                const updatedItem = await storage.updateClothingItem(item.id, {
+                  subcategory: analysis.subcategory || null,
+                  style: analysis.style || "casual",
+                  colors: analysis.colors || [],
+                  dominantColor: analysis.dominant_color || null,
+                  accentColors: analysis.accent_colors || null,
+                  fabricType: analysis.fabric_type || null,
+                  genderStyle: analysis.gender_style || null,
+                  timeOfDay: analysis.time_of_day || null,
+                  occasionSuitability: analysis.suitable_occasions || null,
+                  weatherSuitability: analysis.weather_suitability || null,
+                  warmthLevel: analysis.formality === "formal" ? 2 : 
+                             analysis.formality === "business" ? 3 : 
+                             analysis.formality === "casual" ? 1 : 2,
+                  aiAnalysis: JSON.stringify(analysis),
+                  isVerified: true
                 });
+
+                if (updatedItem) {
+                  processedCount++;
+                  results.push({
+                    id: item.id,
+                    name: item.name,
+                    category: analysis.category || item.category,
+                    subcategory: analysis.subcategory,
+                    style: analysis.style,
+                    colors: analysis.colors,
+                    useCase: analysis.formality,
+                    stylingTips: analysis.styling_tips
+                  });
+                }
               }
             }
+          } catch (error) {
+            console.error(`Failed to analyze item ${item.id}:`, error);
           }
-        } catch (error) {
-          console.error(`Failed to analyze item ${item.id}:`, error);
+        }
+        
+        // Add delay between batches if there are more items to process
+        if (i + batchSize < untaggedItems.length) {
+          console.log(`Processed batch ${Math.floor(i / batchSize) + 1}, waiting before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay between batches
         }
       }
 
