@@ -134,14 +134,20 @@ function validateFileName(fileName: string, existingItems: ClothingItem[]): { is
       };
     }
     
-    // Substring match for names longer than 3 characters
-    if (cleanedNewName.length > 3 && cleanedExistingName.length > 3) {
-      if (cleanedNewName.includes(cleanedExistingName) || cleanedExistingName.includes(cleanedNewName)) {
-        return {
-          isValid: false,
-          reason: "Too similar to existing item name",
-          conflictingItem: item
-        };
+    // Only flag substring matches for very similar names (80% overlap or more)
+    if (cleanedNewName.length > 5 && cleanedExistingName.length > 5) {
+      const minLength = Math.min(cleanedNewName.length, cleanedExistingName.length);
+      const maxLength = Math.max(cleanedNewName.length, cleanedExistingName.length);
+      
+      // Only flag if names are very similar (length difference < 3 chars and high overlap)
+      if (maxLength - minLength < 3) {
+        if (cleanedNewName.includes(cleanedExistingName) || cleanedExistingName.includes(cleanedNewName)) {
+          return {
+            isValid: false,
+            reason: "Too similar to existing item name",
+            conflictingItem: item
+          };
+        }
       }
     }
   }
@@ -149,90 +155,54 @@ function validateFileName(fileName: string, existingItems: ClothingItem[]): { is
   return { isValid: true };
 }
 
-// Helper function to check for duplicate images with enhanced similarity detection
+// Helper function to check for duplicate images with AI-powered analysis
 async function checkForDuplicateImage(imagePath: string, userId: number): Promise<ClothingItem | null> {
   const newImageHash = calculateImageHash(imagePath);
   const existingItems = await storage.getClothingItems(userId);
   
   console.log(`Checking for duplicates: new image hash ${newImageHash}`);
   
+  // First level: Exact hash match only
   for (const item of existingItems) {
     try {
       const existingImagePath = path.join(process.cwd(), item.imageUrl);
       if (fs.existsSync(existingImagePath)) {
         const existingImageHash = calculateImageHash(existingImagePath);
         
-        // Exact hash match - most reliable
+        // Only exact hash matches are considered duplicates at this level
         if (newImageHash === existingImageHash) {
           console.log(`EXACT DUPLICATE DETECTED: Hash ${newImageHash} matches existing item "${item.name}" (ID: ${item.id})`);
           return item;
         }
-        
-        // Enhanced similarity detection
-        const newImageStats = fs.statSync(imagePath);
-        const existingImageStats = fs.statSync(existingImagePath);
-        const sizeDifference = Math.abs(newImageStats.size - existingImageStats.size);
-        const sizeRatio = Math.min(newImageStats.size, existingImageStats.size) / Math.max(newImageStats.size, existingImageStats.size);
-        
-        // STRICT: Enhanced similarity detection with stricter thresholds
-        const similarSize = sizeDifference < 512 || sizeRatio > 0.99; // Ultra-strict: 512B difference or 99% size ratio
-        
-        if (similarSize) {
-          const newFileName = path.basename(imagePath).toLowerCase();
-          const existingFileName = path.basename(existingImagePath).toLowerCase();
-          const itemNameLower = item.name.toLowerCase();
+      }
+    } catch (error) {
+      console.log(`Could not check hash for item ${item.id}: ${error}`);
+    }
+  }
+  
+  // Second level: AI-powered feature analysis for potential duplicates
+  if (genAI) {
+    try {
+      const newImageAnalysis = await analyzeClothingImage(imagePath);
+      
+      for (const item of existingItems) {
+        if (item.color && item.category && item.subCategory && item.style) {
+          // Compare AI-analyzed features
+          const featuresMatch = 
+            newImageAnalysis.color === item.color &&
+            newImageAnalysis.category === item.category &&
+            newImageAnalysis.subCategory === item.subCategory &&
+            newImageAnalysis.style === item.style;
           
-          // More comprehensive copy pattern detection
-          const copyPatterns = [
-            'copy', 'duplicate', '(1)', '(2)', '(3)', '(4)', '(5)',
-            '_copy', '-copy', ' copy', '_duplicate', '-duplicate', ' duplicate',
-            '_1', '_2', '_3', '_4', '_5', '-1', '-2', '-3', '-4', '-5'
-          ];
-          
-          const isCopyPattern = copyPatterns.some(pattern => 
-            newFileName.includes(pattern) || 
-            existingFileName.includes(pattern) ||
-            itemNameLower.includes(pattern)
-          );
-          
-          // Enhanced base name comparison
-          const cleanName = (name: string) => name
-            .replace(/[-_\s]*(copy|duplicate|\(\d+\)|\s-\scopy|\s-\sduplicate|_\d+|-\d+).*$/i, '')
-            .replace(/[^a-z0-9]/g, '');
-          
-          const baseNewName = cleanName(newFileName);
-          const baseExistingName = cleanName(existingFileName);
-          const baseItemName = cleanName(itemNameLower);
-          
-          // Check for similar base names or substring matches
-          const similarNames = 
-            baseNewName === baseExistingName || 
-            baseNewName === baseItemName ||
-            (baseNewName.length > 4 && baseExistingName.includes(baseNewName)) ||
-            (baseExistingName.length > 4 && baseNewName.includes(baseExistingName)) ||
-            (baseNewName.length > 4 && baseItemName.includes(baseNewName)) ||
-            (baseItemName.length > 4 && baseNewName.includes(baseItemName));
-          
-          // STRICT RULE: Ultra-strict duplicate detection
-          if (isCopyPattern || (sizeDifference < 256 && similarNames) || sizeDifference < 128) {
-            console.log(`STRICT DUPLICATE BLOCKED: Size diff ${sizeDifference}B, ratio ${sizeRatio.toFixed(3)}`);
-            console.log(`Copy pattern: ${isCopyPattern}, Similar names: ${similarNames}`);
-            console.log(`New: "${newFileName}" -> "${baseNewName}"`);
-            console.log(`Existing: "${existingFileName}" -> "${baseExistingName}"`);
-            console.log(`Item: "${itemNameLower}" -> "${baseItemName}"`);
-            return item;
-          }
-          
-          // STRICT RULE: Any file with size difference under 64 bytes is considered duplicate
-          if (sizeDifference < 64) {
-            console.log(`ULTRA-STRICT SIZE DETECTION: ${sizeDifference}B difference - blocking potential duplicate of "${item.name}"`);
+          if (featuresMatch) {
+            console.log(`AI DUPLICATE DETECTED: Features match existing item "${item.name}"`);
+            console.log(`Matching features: ${newImageAnalysis.category}/${newImageAnalysis.subCategory}, ${newImageAnalysis.color}, ${newImageAnalysis.style}`);
             return item;
           }
         }
       }
     } catch (error) {
-      console.log(`Could not check hash for item ${item.id}: ${error}`);
-      // Continue checking other items if one fails
+      console.log(`AI analysis failed, skipping feature comparison: ${error}`);
     }
   }
   
