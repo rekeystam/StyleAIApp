@@ -134,22 +134,7 @@ function validateFileName(fileName: string, existingItems: ClothingItem[]): { is
       };
     }
     
-    // Only flag substring matches for very similar names (80% overlap or more)
-    if (cleanedNewName.length > 5 && cleanedExistingName.length > 5) {
-      const minLength = Math.min(cleanedNewName.length, cleanedExistingName.length);
-      const maxLength = Math.max(cleanedNewName.length, cleanedExistingName.length);
-      
-      // Only flag if names are very similar (length difference < 3 chars and high overlap)
-      if (maxLength - minLength < 3) {
-        if (cleanedNewName.includes(cleanedExistingName) || cleanedExistingName.includes(cleanedNewName)) {
-          return {
-            isValid: false,
-            reason: "Too similar to existing item name",
-            conflictingItem: item
-          };
-        }
-      }
-    }
+    // Remove substring matching - only exact matches are flagged
   }
   
   return { isValid: true };
@@ -186,17 +171,17 @@ async function checkForDuplicateImage(imagePath: string, userId: number): Promis
       const newImageAnalysis = await analyzeClothingImage(imagePath);
       
       for (const item of existingItems) {
-        if (item.color && item.category && item.subCategory && item.style) {
+        if (item.dominantColor && item.category && item.subcategory && item.style) {
           // Compare AI-analyzed features
           const featuresMatch = 
-            newImageAnalysis.color === item.color &&
+            newImageAnalysis.dominantColor === item.dominantColor &&
             newImageAnalysis.category === item.category &&
-            newImageAnalysis.subCategory === item.subCategory &&
+            newImageAnalysis.subcategory === item.subcategory &&
             newImageAnalysis.style === item.style;
           
           if (featuresMatch) {
             console.log(`AI DUPLICATE DETECTED: Features match existing item "${item.name}"`);
-            console.log(`Matching features: ${newImageAnalysis.category}/${newImageAnalysis.subCategory}, ${newImageAnalysis.color}, ${newImageAnalysis.style}`);
+            console.log(`Matching features: ${newImageAnalysis.category}/${newImageAnalysis.subcategory}, ${newImageAnalysis.dominantColor}, ${newImageAnalysis.style}`);
             return item;
           }
         }

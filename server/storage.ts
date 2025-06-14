@@ -62,23 +62,23 @@ export class MemStorage implements IStorage {
   private initializeSampleData() {
     // Initialize sample data in memory storage
 
-    // Create demo male user profile with fixed attributes for testing
+    // Create demo male user profile with stable attributes matching UI
     const sampleUser: User = {
       id: 1,
       username: "demo",
       password: "demo",
-      bodyType: "average",
-      skinTone: "medium-dark",
+      bodyType: "hourglass",
+      skinTone: "warm",
       age: 40,
       height: 177,
       hairColor: "brunette",
       hairLength: "short",
       gender: "male",
-      location: "New York, NY",
+      location: "Helsinki",
       makeupPreference: false,
       preferences: JSON.stringify({
         favoriteColors: ["navy", "black", "white", "grey", "burgundy"],
-        preferredStyles: ["business", "smart_casual", "casual"],
+        preferredStyles: ["casual", "business", "formal", "boho", "minimalist", "vintage", "sporty", "romantic", "classic", "trendy", "artistic"],
         avoidColors: ["neon", "bright_pink", "lime"],
         occasions: ["work", "casual", "formal", "weekend", "business_meetings"]
       })
@@ -86,17 +86,17 @@ export class MemStorage implements IStorage {
     this.users.set(1, sampleUser);
 
     // No sample items loaded automatically - users start with an empty wardrobe
-    // Add sample weather data
+    // Add sample weather data for Helsinki
     const sampleWeather: WeatherData = {
       id: 1,
-      location: "New York, NY",
-      temperature: 22,
-      condition: "sunny",
-      humidity: 55,
-      windSpeed: 10,
+      location: "Helsinki",
+      temperature: 18,
+      condition: "partly_cloudy",
+      humidity: 65,
+      windSpeed: 12,
       timestamp: new Date()
     };
-    this.weatherData.set("New York, NY", sampleWeather);
+    this.weatherData.set("Helsinki", sampleWeather);
   }
 
   async getUser(id: number): Promise<User | undefined> {
