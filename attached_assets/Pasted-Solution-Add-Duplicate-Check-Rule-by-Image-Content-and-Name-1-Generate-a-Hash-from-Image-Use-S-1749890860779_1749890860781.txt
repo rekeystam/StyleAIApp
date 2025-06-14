@@ -1,0 +1,68 @@
+Solution: Add Duplicate Check Rule by Image Content and Name
+🛠️ 1. Generate a Hash from Image
+Use SHA-256 or MD5 to hash the image content on the server before saving.
+
+js
+Copy
+Edit
+const crypto = require('crypto');
+
+function generateImageHash(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+If using multer or base64 uploads, extract buffer and call this function.
+
+🛠️ 2. Update Your ClothingItem Schema
+Add imageHash as a unique field:
+
+js
+Copy
+Edit
+const ClothingItemSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  category: String,
+  imageUrl: String,
+  imageHash: { type: String, required: true, unique: true },
+  createdAt: { type: Date, default: Date.now }
+});
+🛠️ 3. Update Upload Endpoint to Prevent Duplicates
+js
+Copy
+Edit
+router.post('/api/clothing-items', async (req, res) => {
+  try {
+    const { name, category } = req.body;
+    const imageBuffer = req.file.buffer; // or extract from base64
+
+    const imageHash = generateImageHash(imageBuffer);
+
+    // Check if image already exists
+    const duplicate = await ClothingItem.findOne({ imageHash });
+    if (duplicate) {
+      return res.status(409).json({ error: 'Duplicate image detected. This item already exists.' });
+    }
+
+    // Save file, e.g. to S3 or local folder and store URL
+    const imageUrl = await uploadToStorage(req.file); // your storage function
+
+    const newItem = new ClothingItem({ name, category, imageUrl, imageHash });
+    await newItem.save();
+
+    res.status(201).json(newItem);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to upload item.' });
+  }
+});
+✅ Front-End UX Improvement (Optional)
+Before allowing upload, you can:
+
+Disable upload button if the file name already exists in the database or on screen.
+
+Alert the user when the file matches a previous upload visually or by metadata.
+
+Summary of Prevention Rules
+Rule	Description
+Image Hashing	Prevents upload of visually identical images
+Name Match	Prevents upload of same filename
+Frontend Display Filter	Avoids duplicates on UI even if user bypassed backend
