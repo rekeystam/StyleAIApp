@@ -561,19 +561,72 @@ function validateOutfitCombination(itemIds: number[], userItems: ClothingItem[])
     if (!['accessories', 'shoes'].includes(category) && count > 1) return false;
   }
   
-  // RULE 2: ULTRA-FLEXIBLE OUTFIT STRUCTURE
+  // RULE 2: STRICT BUSINESS LOGIC AND STYLE MATCHING
   const hasTop = categoryCount['tops'] > 0;
   const hasBottom = categoryCount['bottoms'] > 0;
   const hasDress = categoryCount['dresses'] > 0;
   const hasOuterwear = categoryCount['outerwear'] > 0;
-  const hasShoes = categoryCount['shoes'] > 0;
   
-  // Accept ANY reasonable combination - focus on completeness not style matching
+  // Basic structure validation
   const coreOutfit = hasDress || (hasTop && hasBottom);
-  const versatileOutfit = (hasTop && hasOuterwear) || (hasBottom && hasOuterwear) || selectedItems.length >= 3;
-  const minimalOutfit = selectedItems.length >= 2; // Even just two pieces can work
+  const versatileOutfit = (hasTop && hasOuterwear) || (hasBottom && hasOuterwear);
   
-  if (!coreOutfit && !versatileOutfit && !minimalOutfit) return false;
+  if (!coreOutfit && !versatileOutfit) {
+    console.log(`OUTFIT REJECTED: Insufficient core structure`);
+    return false;
+  }
+
+  // STRICT BUSINESS LOGIC RULES
+  const businessItems = selectedItems.filter(item => {
+    const analysis = item.aiAnalysis ? JSON.parse(item.aiAnalysis) : {};
+    return item.style === 'business' || 
+           item.style === 'formal' ||
+           analysis.formality === 'business' ||
+           analysis.formality === 'formal' ||
+           item.subcategory === 'dress_shirt' ||
+           item.subcategory === 'suit_jacket' ||
+           item.subcategory === 'blazer';
+  });
+  
+  const casualItems = selectedItems.filter(item => {
+    return item.style === 'sporty' || 
+           item.subcategory === 'shorts' ||
+           item.subcategory === 'athletic_shorts' ||
+           item.subcategory === 'gym_shorts' ||
+           item.subcategory === 't_shirt';
+  });
+
+  // FORBIDDEN: Business/formal with casual/sporty
+  if (businessItems.length > 0 && casualItems.length > 0) {
+    console.log(`OUTFIT REJECTED: Cannot mix business items with casual/sporty items`);
+    return false;
+  }
+
+  // FORBIDDEN: Dress shirts with shorts
+  const dressShirts = selectedItems.filter(item => 
+    item.subcategory === 'dress_shirt' || item.subcategory === 'button_down'
+  );
+  const shorts = selectedItems.filter(item => 
+    item.subcategory?.includes('shorts')
+  );
+  
+  if (dressShirts.length > 0 && shorts.length > 0) {
+    console.log(`OUTFIT REJECTED: Cannot wear dress shirts with shorts`);
+    return false;
+  }
+
+  // FORBIDDEN: Formal shoes with athletic wear
+  const formalShoes = selectedItems.filter(item => 
+    item.category === 'shoes' && (item.subcategory === 'dress_shoes' || item.style === 'formal')
+  );
+  const athleticWear = selectedItems.filter(item => 
+    item.style === 'sporty' || item.subcategory?.includes('athletic')
+  );
+  
+  if (formalShoes.length > 0 && athleticWear.length > 0) {
+    console.log(`OUTFIT REJECTED: Cannot wear formal shoes with athletic wear`);
+    return false;
+  }
   
   // RULE 3: ULTRA-RELAXED COLOR VALIDATION
   const allColors = selectedItems.flatMap(item => item.colors.map(c => c.toLowerCase()));
@@ -1881,10 +1934,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         analysis = null;
       }
       
+      // Generate smart name from AI analysis or use original as fallback
+      let smartName = name;
+      if (analysis && analysis.item_type) {
+        // Use AI-detected item type as the primary name
+        smartName = analysis.item_type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        
+        // Add color if available
+        if (analysis.dominant_color) {
+          const colorName = analysis.dominant_color.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+          smartName = `${colorName} ${smartName}`;
+        }
+      }
+
       // Create clothing item with proper handling of failed analysis
       const itemData = {
         userId: DEMO_USER_ID,
-        name,
+        name: smartName,
         category: analysis?.category || "unprocessed",
         subcategory: analysis?.subcategory || null,
         style: analysis?.style || "pending",
