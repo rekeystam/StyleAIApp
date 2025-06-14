@@ -86,108 +86,49 @@ function calculateImageHash(imagePath: string): string {
   }
 }
 
-// Enhanced filename validation to prevent bypass attempts
+// Reasonable filename validation to prevent obvious duplicates
 function validateFileName(fileName: string, existingItems: ClothingItem[]): { isValid: boolean; reason?: string; conflictingItem?: ClothingItem } {
   const normalizedName = fileName.toLowerCase().trim();
   
-  // Check for suspicious patterns that indicate duplicate attempts
-  const suspiciousPatterns = [
-    { pattern: /copy/i, description: "contains 'copy'" },
-    { pattern: /duplicate/i, description: "contains 'duplicate'" },
-    { pattern: /\(\d+\)/i, description: "contains numbered parentheses" },
-    { pattern: /_\d+$/, description: "ends with underscore and number" },
-    { pattern: /-\d+$/, description: "ends with dash and number" },
-    { pattern: /copy\s*\d*/i, description: "contains 'copy' with optional number" },
-    { pattern: /version\s*\d*/i, description: "contains 'version' pattern" },
-    { pattern: /new\s*copy/i, description: "contains 'new copy'" },
-    { pattern: /another\s*copy/i, description: "contains 'another copy'" },
-    { pattern: /final\s*copy/i, description: "contains 'final copy'" },
-    { pattern: /backup/i, description: "contains 'backup'" },
-    { pattern: /temp/i, description: "contains 'temp'" },
-    { pattern: /test/i, description: "contains 'test'" }
-  ];
-  
-  for (const { pattern, description } of suspiciousPatterns) {
-    if (pattern.test(normalizedName)) {
-      return { 
-        isValid: false, 
-        reason: `Filename ${description} - this suggests a duplicate attempt` 
-      };
-    }
-  }
-  
-  // Check against existing item names with ultra-strict comparison
-  const cleanName = (name: string) => name.toLowerCase().trim()
-    .replace(/[^a-z0-9]/g, '');
-  
-  const cleanedNewName = cleanName(fileName);
-  
+  // Only check for exact name matches - allow natural variations
   for (const item of existingItems) {
-    const cleanedExistingName = cleanName(item.name);
+    const existingName = item.name.toLowerCase().trim();
     
-    // Exact match after cleaning
-    if (cleanedNewName === cleanedExistingName) {
+    // Only reject exact matches
+    if (normalizedName === existingName) {
       return {
         isValid: false,
-        reason: "Identical name to existing item",
+        reason: "Exact name match with existing item",
         conflictingItem: item
       };
     }
-    
-    // Remove substring matching - only exact matches are flagged
   }
   
   return { isValid: true };
 }
 
-// Helper function to check for duplicate images with AI-powered analysis
+// Helper function to check for duplicate images - only exact matches
 async function checkForDuplicateImage(imagePath: string, userId: number): Promise<ClothingItem | null> {
   const newImageHash = calculateImageHash(imagePath);
   const existingItems = await storage.getClothingItems(userId);
   
-  console.log(`Checking for duplicates: new image hash ${newImageHash}`);
+  console.log(`Checking for duplicates: new image hash ${newImageHash.substring(0, 16)}...`);
   
-  // First level: Exact hash match only
+  // Only check for exact hash matches - no AI feature comparison
   for (const item of existingItems) {
     try {
       const existingImagePath = path.join(process.cwd(), item.imageUrl);
       if (fs.existsSync(existingImagePath)) {
         const existingImageHash = calculateImageHash(existingImagePath);
         
-        // Only exact hash matches are considered duplicates at this level
+        // Only exact hash matches are considered duplicates
         if (newImageHash === existingImageHash) {
-          console.log(`EXACT DUPLICATE DETECTED: Hash ${newImageHash} matches existing item "${item.name}" (ID: ${item.id})`);
+          console.log(`EXACT DUPLICATE DETECTED: Hash matches existing item "${item.name}" (ID: ${item.id})`);
           return item;
         }
       }
     } catch (error) {
       console.log(`Could not check hash for item ${item.id}: ${error}`);
-    }
-  }
-  
-  // Second level: AI-powered feature analysis for potential duplicates
-  if (genAI) {
-    try {
-      const newImageAnalysis = await analyzeClothingImage(imagePath);
-      
-      for (const item of existingItems) {
-        if (item.dominantColor && item.category && item.subcategory && item.style) {
-          // Compare AI-analyzed features
-          const featuresMatch = 
-            newImageAnalysis.dominantColor === item.dominantColor &&
-            newImageAnalysis.category === item.category &&
-            newImageAnalysis.subcategory === item.subcategory &&
-            newImageAnalysis.style === item.style;
-          
-          if (featuresMatch) {
-            console.log(`AI DUPLICATE DETECTED: Features match existing item "${item.name}"`);
-            console.log(`Matching features: ${newImageAnalysis.category}/${newImageAnalysis.subcategory}, ${newImageAnalysis.dominantColor}, ${newImageAnalysis.style}`);
-            return item;
-          }
-        }
-      }
-    } catch (error) {
-      console.log(`AI analysis failed, skipping feature comparison: ${error}`);
     }
   }
   
@@ -1822,48 +1763,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // STRICT RULE: Additional filename pattern checks
-      const originalFileName = req.file.originalname.toLowerCase();
-      const uploadedFileName = req.file.filename.toLowerCase();
-      
-      const suspiciousFilePatterns = [
-        /copy\s*of/i, /duplicate\s*of/i, /version\s*\d/i, /\(\d+\)\./i,
-        /copy\./i, /duplicate\./i, /_copy\./i, /-copy\./i, /backup\./i
-      ];
-      
-      for (const pattern of suspiciousFilePatterns) {
-        if (pattern.test(originalFileName) || pattern.test(uploadedFileName)) {
-          fs.unlinkSync(req.file.path);
-          return res.status(409).json({
-            error: "This item has already been uploaded. Duplicate images are not allowed.",
-            message: `File name pattern suggests duplicate attempt: ${originalFileName}`,
-            strictRule: "STRICT RULE APPLIED: Suspicious file naming patterns are blocked."
-          });
-        }
-      }
-      
-      // Clean and normalize names for comparison
-      const cleanName = (str: string) => str.toLowerCase().trim()
-        .replace(/[-_\s]*(copy|duplicate|\(\d+\)|\s-\scopy).*$/i, '')
-        .replace(/\s+/g, ' ');
-      
-      const normalizedNewName = cleanName(name);
-      
+      // Check for exact name duplicates only
       const duplicateName = existingItems.find(item => {
-        const normalizedExistingName = cleanName(item.name);
-        
-        // Exact match after normalization
-        if (normalizedExistingName === normalizedNewName) {
-          return true;
-        }
-        
-        // Check if one name contains the other (for variations like "jacket" vs "jacket - copy")
-        if (normalizedNewName.length > 3 && normalizedExistingName.length > 3) {
-          return normalizedExistingName.includes(normalizedNewName) || 
-                 normalizedNewName.includes(normalizedExistingName);
-        }
-        
-        return false;
+        return item.name.toLowerCase().trim() === name.toLowerCase().trim();
       });
       
       if (duplicateName) {
@@ -1873,26 +1775,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: "This item has already been uploaded. Duplicate items are not allowed.",
           existingItem: duplicateName,
           duplicateType: "name",
-          message: `"${name}" is too similar to existing item "${duplicateName.name}". Each item must have a unique name.`,
-          strictRule: "STRICT RULE APPLIED: Only one image per item is allowed."
+          message: `An item named "${name}" already exists in your wardrobe. Please use a different name.`
         });
       }
 
-      // STRICT RULE: Advanced content-level duplicate detection
-      console.log(`STRICT VALIDATION: Starting comprehensive duplicate check for file: ${req.file.filename}, size: ${req.file.size}B`);
+      // Check for exact image duplicates only
+      console.log(`Checking for duplicate images for: ${req.file.filename}`);
       const duplicateImage = await checkForDuplicateImage(req.file.path, DEMO_USER_ID);
       
       if (duplicateImage) {
         // Delete the uploaded file since we're rejecting it
         fs.unlinkSync(req.file.path);
-        console.log(`STRICT DUPLICATE BLOCKED: "${name}" matches existing item "${duplicateImage.name}" (ID: ${duplicateImage.id})`);
+        console.log(`Duplicate image detected: "${name}" matches existing item "${duplicateImage.name}"`);
         return res.status(409).json({ 
-          error: "This item has already been uploaded. Duplicate images are not allowed.",
+          error: "Duplicate image detected",
           existingItem: duplicateImage,
           duplicateType: "image",
-          message: `This item already exists in your wardrobe. The uploaded image is identical or very similar to "${duplicateImage.name}" that you already have saved.`,
-          strictRule: "STRICT RULE APPLIED: Advanced content-level comparison detected this duplicate. Single image per item enforced.",
-          blockReason: "Content-level duplicate detection with hash comparison and similarity analysis"
+          message: `This image is identical to "${duplicateImage.name}" in your wardrobe.`
         });
       }
 
